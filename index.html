@@ -133,7 +133,13 @@
 
     <!-- Firebase 이메일 로그인 오버레이 -->
     <div id="login-overlay">
-        <div class="login-box">
+        <!-- 1. 자동 로그인 대기 중일 때 보여줄 로딩 화면 -->
+        <div id="auth-loading" style="color: white; font-size: 1.2em; font-weight: bold;">
+            ⏳ 사용자 정보를 확인 중입니다...
+        </div>
+
+        <!-- 2. 로그인이 안 되어 있을 때만 나타나는 진짜 로그인 박스 -->
+        <div class="login-box" id="login-box" style="display: none;">
             <h2 style="margin-top: 0;">로그인</h2>
             <p style="font-size: 0.9em; color: #666;">계정 정보를 입력하세요.</p>
             <input type="text" id="email-input" placeholder="아이디">
@@ -192,9 +198,9 @@
         // 2. 로그인 및 역할 인증 (서버 DB 확인)
         // ==========================================
         let loggedInRole = null; 
-        let dbListener = null; // 서버 리스너 변수
+        let dbListener = null; 
+        let isDataLoaded = false; // 🔥 핵심 방어 장치: 데이터 로드 상태 플래그
 
-        // 🔥 새로고침해도 로그인이 유지되도록 상태 감지
         auth.onAuthStateChanged((user) => {
             if (user) {
                 // 로그인 된 상태면 DB에서 권한 조회
@@ -207,25 +213,33 @@
                         document.getElementById('logout-btn').style.display = 'block';
                         setMode(loggedInRole); 
                         
-                        // 🔥 중요: 로그인이 완벽히 확인된 '후에' 데이터 연동 시작!
                         attachDatabaseListener();
                     } else {
-                        document.getElementById('login-error').style.display = 'block';
-                        document.getElementById('login-error').style.color = 'red';
-                        document.getElementById('login-error').innerText = "서버에 권한이 등록되지 않은 사용자입니다.";
+                        showLoginBox("서버에 권한이 등록되지 않은 사용자입니다.");
                         auth.signOut();
                     }
                 });
             } else {
-                // 로그아웃 상태면 로그인 창 표시
-                document.getElementById('login-overlay').style.display = 'flex';
-                document.getElementById('logout-btn').style.display = 'none';
+                // 로그아웃 상태일 때만 로그인 박스를 표시 (깜빡임 방지)
+                showLoginBox();
             }
         });
 
+        function showLoginBox(errorMsg = null) {
+            document.getElementById('login-overlay').style.display = 'flex';
+            document.getElementById('auth-loading').style.display = 'none';
+            document.getElementById('login-box').style.display = 'block';
+            document.getElementById('logout-btn').style.display = 'none';
+            
+            if(errorMsg) {
+                document.getElementById('login-error').style.display = 'block';
+                document.getElementById('login-error').style.color = 'red';
+                document.getElementById('login-error').innerText = errorMsg;
+            }
+        }
+
         function attemptLogin() {
             let idValue = document.getElementById('email-input').value.trim();
-            // 입력한 아이디에 자동으로 가짜 이메일 도메인 추가 (이미 @가 있으면 그대로 사용)
             const email = idValue.includes('@') ? idValue : idValue + "@mail.com";
             
             const password = document.getElementById('password-input').value;
@@ -235,17 +249,15 @@
             errorMsg.style.display = 'block';
             errorMsg.style.color = '#333';
 
-            // 로그인이 성공하면 위의 onAuthStateChanged가 자동으로 실행됩니다.
             auth.signInWithEmailAndPassword(email, password)
                 .catch((error) => {
                     errorMsg.style.color = 'red';
                     errorMsg.innerText = "아이디 또는 비밀번호가 일치하지 않습니다.";
-                    console.error("로그인 실패:", error);
                 });
         }
 
         function logout() {
-            if (dbListener) scheduleRef.off('value', dbListener); // 로그아웃 시 리스너 해제
+            if (dbListener) scheduleRef.off('value', dbListener); 
             auth.signOut().then(() => location.reload());
         }
 
@@ -375,7 +387,6 @@
                 studentData[cellId] = !studentData[cellId];
             } 
             else if (currentMode === 'result') {
-                // 매칭 결과 화면에서는 아무나 확정(★) 가능
                 if (!tutorData[cellId] && !studentData[cellId]) {
                     classData[cellId] = !classData[cellId];
                 }
@@ -384,6 +395,12 @@
         }
 
         function startDrag(cellId) {
+            // 🔥 핵심 방어 장치: 서버 데이터를 불러오기 전에는 조작 불가
+            if (!isDataLoaded) {
+                showMessage("⏳ 서버 동기화 중입니다. 잠시만 기다려주세요.");
+                return;
+            }
+            
             isDragging = true;
             toggleCell(cellId);
         }
@@ -395,7 +412,7 @@
         function stopDrag() {
             if (isDragging) {
                 isDragging = false;
-                saveToServer(); // 드래그 완료 시 부분 업데이트
+                saveToServer(); 
             }
         }
 
@@ -408,14 +425,13 @@
                     
                     cell.className = 'cell';
                     cell.innerHTML = '';
-                    cell.style.backgroundColor = ''; // 스타일 초기화
+                    cell.style.backgroundColor = ''; 
 
                     if (currentMode === 'tutor') {
                         if (tutorData[cellId]) {
                             cell.classList.add('tutor-busy');
                             cell.innerText = 'X';
                         } else if (studentData[cellId]) {
-                            // 선생님 모드일 때 학생 불가능 시간을 흐리게 표시
                             cell.classList.add('other-bg');
                             cell.innerHTML = '학생불가';
                         }
@@ -424,7 +440,6 @@
                             cell.classList.add('student-busy');
                             cell.innerText = 'X';
                         } else if (tutorData[cellId]) {
-                            // 학생 모드일 때 선생님 불가능 시간을 흐리게 표시
                             cell.classList.add('other-bg');
                             cell.innerHTML = '선생불가';
                         }
@@ -450,13 +465,13 @@
         }
 
         // ==========================================
-        // 5. 서버 저장 및 실시간 동기화 (Update 방식)
+        // 5. 서버 저장 및 실시간 동기화
         // ==========================================
         function saveToServer() {
-            if (!loggedInRole) return;
+            if (!loggedInRole || !isDataLoaded) return; // 로드 완료 전 저장 원천 차단
+            
             document.getElementById('sync-status').innerHTML = "⏳ 서버에 저장 중...";
             
-            // 위험한 전체 덮어쓰기(set) 대신 현재 수정 중인 데이터 묶음만 부분 업데이트(update) 수행
             const updates = {};
             if (currentMode === 'tutor') updates['tutor'] = tutorData;
             else if (currentMode === 'student') updates['student'] = studentData;
@@ -470,12 +485,11 @@
             });
         }
 
-        // 🔥 로그인 전에는 실행되지 않도록 함수로 묶음
         function attachDatabaseListener() {
             document.getElementById('sync-status').innerHTML = "🟡 서버에서 데이터 불러오는 중...";
             
             dbListener = scheduleRef.on('value', (snapshot) => {
-                if (isDragging) return; // 내가 드래그 중일 땐 서버 데이터를 무시함 (깜빡임 방지)
+                if (isDragging) return; 
 
                 const data = snapshot.val();
                 if (data) {
@@ -492,6 +506,10 @@
                 } else {
                     document.getElementById('sync-status').innerHTML = "🟢 실시간 연결됨 (데이터 없음)";
                 }
+                
+                // 🔥 서버 데이터 확인 완료! 이제부터 터치(입력) 허용
+                isDataLoaded = true; 
+
             }, (error) => {
                 console.error("데이터 읽기 권한 없음:", error);
                 document.getElementById('sync-status').innerHTML = "🔴 권한 거부됨";
@@ -529,7 +547,6 @@
                         classData = Object.assign(classData, loadedData.classTime || {});
                         
                         renderTable();
-                        // 과거 파일을 불러왔을 땐 명시적으로 전체를 덮어쓰기 위해 set 사용
                         scheduleRef.set({
                             tutor: tutorData,
                             student: studentData,
