@@ -2,9 +2,13 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <!-- 모바일 최적화: 화면 배율 고정 및 더블 탭 확대 방지 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scheduler</title>
+    <title>수업 스케줄러 (실시간)</title>
+    
+    <!-- Firebase 실시간 데이터베이스를 사용하기 위한 라이브러리 불러오기 -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
     <style>
         body { 
             font-family: 'Malgun Gothic', sans-serif; 
@@ -40,11 +44,10 @@
         #btn-tutor { background-color: #4A90E2; color: white; }
         #btn-student { background-color: #F5A623; color: white; }
         #btn-result { background-color: #4CAF50; color: white; font-size: 1em;}
-        
-        #btn-save, #btn-load { font-size: 0.85em; padding: 10px 15px; }
         #btn-ical { font-size: 0.85em; padding: 10px 15px; background-color: #E74C3C; color: white; }
 
-        #mode-text { margin-bottom: 15px; font-size: 1em; color: #333; line-height: 1.4; }
+        #mode-text { margin-bottom: 5px; font-size: 1em; color: #333; line-height: 1.4; }
+        #sync-status { display: inline-block; margin-bottom: 15px; font-size: 0.85em; font-weight: bold; color: #2ecc71; }
 
         .table-container {
             max-width: 100vw;
@@ -95,7 +98,7 @@
 </head>
 <body>
 
-    <h2>Scheduler</h2>
+    <h2>수업 실시간 스케줄러</h2>
     
     <div class="controls">
         <select id="week-selector" onchange="changeWeek()"></select>
@@ -104,11 +107,6 @@
         <button id="btn-student" onclick="setMode('student')">학생 일정</button>
         <button id="btn-result" onclick="showResult()">매칭 결과</button>
         <br>
-        <button id="btn-save" onclick="saveData()" style="background-color: #8E44AD; color: white;">💾 일정 저장</button>
-        <button id="btn-load" onclick="document.getElementById('file-input').click()" style="background-color: #2C3E50; color: white;">📂 파일 열기</button>
-        <input type="file" id="file-input" style="display: none;" accept=".json" onchange="handleFileLoad(event)">
-        
-        <!-- 새로운 iCal 내보내기 버튼 및 일정 이름 입력란 -->
         <input type="text" id="event-name" placeholder="일정 이름 입력" style="padding: 10px; margin: 4px; border-radius: 8px; border: 1px solid #ccc; font-size: 0.85em; width: 120px; text-align: center; vertical-align: middle;">
         <button id="btn-ical" onclick="exportICal()">📅 캘린더로 내보내기</button>
     </div>
@@ -117,12 +115,34 @@
         <b>선생님 일정 입력 (파란색)</b><br>
         <small>PC는 드래그, 모바일은 화면을 터치</small>
     </div>
+    <div id="sync-status">🟡 서버에 연결 중...</div>
 
     <div class="table-container">
         <table id="schedule-table"></table>
     </div>
 
     <script>
+        // ==========================================
+        // 1. 파이어베이스(서버) 연결 설정
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBWQvoSrlT20FLyIW75GLo38lwo0uKE-_Q",
+            authDomain: "lesson-scheduler-f3d37.firebaseapp.com",
+            databaseURL: "https://lesson-scheduler-f3d37-default-rtdb.firebaseio.com",
+            projectId: "lesson-scheduler-f3d37",
+            storageBucket: "lesson-scheduler-f3d37.firebasestorage.app",
+            messagingSenderId: "1026285811305",
+            appId: "1:1026285811305:web:d85180790ff9b2a13314f8",
+            measurementId: "G-P7Q3R1WK40"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const scheduleRef = db.ref('shared_schedule'); // 데이터베이스 저장 공간 이름
+
+        // ==========================================
+        // 2. 기본 데이터 및 UI 변수 세팅
+        // ==========================================
         let currentMode = 'tutor'; 
         let tutorData = {};
         let studentData = {};
@@ -137,7 +157,6 @@
         const daysArr = [];
         const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
 
-        // 날짜 배열 생성 (iCal을 위해 년/월/일 정보 구체적으로 저장)
         for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
             const year = d.getFullYear();
             const month = d.getMonth() + 1;
@@ -146,11 +165,7 @@
             let dayClass = dayNum === 0 ? 'sun' : (dayNum === 6 ? 'sat' : '');
             daysArr.push({ 
                 label: `${month}/${date}<br><span class="${dayClass}">(${dayNames[dayNum]})</span>`, 
-                id: `${month}-${date}`, 
-                dayNum: dayNum,
-                year: year,
-                month: month,
-                date: date
+                id: `${month}-${date}`, dayNum: dayNum, year: year, month: month, date: date
             });
         }
 
@@ -164,6 +179,7 @@
             }
         }
 
+        // 초기 빈 데이터 생성
         for (let day of daysArr) {
             for (let time of times) {
                 const cellId = `${day.id}-${time}`;
@@ -212,7 +228,10 @@
         }
 
         buildTable(0);
-        
+
+        // ==========================================
+        // 3. 상호작용 및 서버 자동 동기화 로직
+        // ==========================================
         document.body.addEventListener('mouseup', stopDrag);
         document.body.addEventListener('touchend', stopDrag);
 
@@ -242,7 +261,10 @@
         }
 
         function stopDrag() {
-            isDragging = false;
+            if (isDragging) {
+                isDragging = false;
+                saveToServer(); // 드래그(또는 클릭)가 끝나면 서버로 자동 저장!
+            }
         }
 
         function renderTable() {
@@ -282,71 +304,56 @@
             renderTable();
         }
 
-        function restoreModeText() {
-            if (currentMode === 'tutor') setMode('tutor');
-            else if (currentMode === 'student') setMode('student');
-            else if (currentMode === 'result') showResult();
+        // --- 실시간 서버 저장/불러오기 함수 ---
+        function saveToServer() {
+            document.getElementById('sync-status').innerHTML = "⏳ 서버에 저장 중...";
+            scheduleRef.set({
+                tutor: tutorData,
+                student: studentData,
+                classTime: classData
+            }).then(() => {
+                document.getElementById('sync-status').innerHTML = "🟢 실시간 연결됨";
+            }).catch((error) => {
+                document.getElementById('sync-status').innerHTML = "🔴 저장 실패";
+                console.error(error);
+            });
         }
 
-        function showMessage(msg) {
-            document.getElementById('mode-text').innerHTML = `<b style="color: #e74c3c; font-size: 1.1em;">${msg}</b>`;
-            setTimeout(restoreModeText, 3500); 
-        }
+        // 누군가 데이터를 변경하면 실시간으로 내 화면도 업데이트 됨
+        scheduleRef.on('value', (snapshot) => {
+            if (isDragging) return; // 내가 드래그 입력 중일 때는 덮어쓰기 방지
 
-        function saveData() {
-            const dataToSave = { tutor: tutorData, student: studentData, classTime: classData };
-            const dataStr = JSON.stringify(dataToSave);
-            const blob = new Blob([dataStr], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = "과외스케줄.json";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            showMessage("일정이 저장되었습니다.");
-        }
+            const data = snapshot.val();
+            if (data) {
+                if (data.tutor) tutorData = Object.assign(tutorData, data.tutor);
+                if (data.student) studentData = Object.assign(studentData, data.student);
+                if (data.classTime) classData = Object.assign(classData, data.classTime);
+                renderTable();
+                
+                document.getElementById('sync-status').innerHTML = "✨ 최신 데이터 불러옴";
+                setTimeout(() => {
+                    document.getElementById('sync-status').innerHTML = "🟢 실시간 연결됨";
+                }, 2000);
+            } else {
+                document.getElementById('sync-status').innerHTML = "🟢 실시간 연결됨 (새 일정)";
+            }
+        });
 
-        function handleFileLoad(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const loadedData = JSON.parse(e.target.result);
-                    if (loadedData.tutor && loadedData.student) {
-                        tutorData = Object.assign(tutorData, loadedData.tutor);
-                        studentData = Object.assign(studentData, loadedData.student);
-                        classData = Object.assign(classData, loadedData.classTime || {});
-                        renderTable();
-                        showMessage("성공적으로 일정을 불러왔습니다.");
-                    } else {
-                        showMessage("잘못된 파일 형식입니다.");
-                    }
-                } catch (error) {
-                    showMessage("파일을 읽는 중 오류가 발생했습니다.");
-                }
-            };
-            reader.readAsText(file);
-            event.target.value = '';
-        }
 
+        // ==========================================
+        // 4. iCal 내보내기 로직 (변경 없음)
+        // ==========================================
         function getIcsDateStr(year, month, date, hour) {
             const pad = (n) => String(n).padStart(2, '0');
-            // 자정(24시)을 다음날 00시로 자동 계산해주는 Date 객체 활용
             const d = new Date(year, month - 1, date, hour); 
             return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}0000`;
         }
 
         function exportICal() {
-            // 사용자 입력 이름 가져오기 (입력란이 비어있으면 기본값 적용)
             let eventName = document.getElementById('event-name').value.trim();
-            if (!eventName) {
-                eventName = "이은";
-            }
+            if (!eventName) eventName = "수업";
 
-            let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//과외 스케줄 매칭기//KO\r\n";
+            let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//수업 스케줄 매칭기//KO\r\n";
             let eventCount = 0;
             
             for (let day of daysArr) {
@@ -361,19 +368,18 @@
                     if (isConfirmed) {
                         if (startHr === null) {
                             startHr = parseInt(time.split(':')[0]);
-                            endHr = startHr + 1; // 1시간 단위
+                            endHr = startHr + 1; 
                         } else {
-                            endHr++; // 연속된 시간이면 종료 시간만 1시간 연장
+                            endHr++; 
                         }
                     } 
                     
-                    // 확정된 시간이 끝났거나, 하루가 끝났을 때 이벤트를 파일에 작성
                     if ((!isConfirmed || i === times.length - 1) && startHr !== null) {
                         const startStr = getIcsDateStr(day.year, day.month, day.date, startHr);
                         const endStr = getIcsDateStr(day.year, day.month, day.date, endHr);
                         
                         icsContent += "BEGIN:VEVENT\r\n";
-                        icsContent += `DTSTART:${startStr}\r\n`; // 로컬 시간 기준 적용
+                        icsContent += `DTSTART:${startStr}\r\n`; 
                         icsContent += `DTEND:${endStr}\r\n`;
                         icsContent += `SUMMARY:${eventName}\r\n`;
                         icsContent += "END:VEVENT\r\n";
@@ -388,7 +394,7 @@
             icsContent += "END:VCALENDAR\r\n";
 
             if (eventCount === 0) {
-                showMessage("확정된(★) 수업 일정이 없습니다.");
+                alert("확정된(★) 수업 일정이 없습니다.");
                 return;
             }
             
@@ -402,38 +408,8 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            showMessage(`${eventCount}개의 일정이 캘린더 파일로 저장되었습니다!`);
+            alert(`${eventCount}개의 일정이 캘린더 파일로 저장되었습니다!`);
         }
-
-        // 서버(GitHub)에서 기본 일정 파일(default_schedule.json) 자동 불러오기
-        async function loadDefaultSchedule() {
-            try {
-                // 브라우저 캐시로 인해 옛날 일정이 보이는 것을 방지하기 위해 쿼리스트링 추가
-                const response = await fetch('default_schedule.json?t=' + new Date().getTime());
-                
-                if (!response.ok) {
-                    // 파일이 없으면 조용히 넘어감 (빈 달력 표시)
-                    console.log("기본 일정 파일(default_schedule.json)이 서버에 없습니다.");
-                    return;
-                }
-                
-                const loadedData = await response.json();
-                if (loadedData.tutor && loadedData.student) {
-                    tutorData = Object.assign(tutorData, loadedData.tutor);
-                    studentData = Object.assign(studentData, loadedData.student);
-                    classData = Object.assign(classData, loadedData.classTime || {});
-                    renderTable();
-                    console.log("서버에서 기본 일정을 성공적으로 불러왔습니다.");
-                }
-            } catch (error) {
-                console.log("기본 일정 파일을 읽는 중 오류가 발생했습니다.", error);
-            }
-        }
-
-        // 페이지가 열리면 즉시 기본 일정 불러오기 실행
-        window.addEventListener('DOMContentLoaded', () => {
-            loadDefaultSchedule();
-        });
     </script>
 </body>
 </html>
