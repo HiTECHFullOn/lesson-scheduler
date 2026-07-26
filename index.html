@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>수업 스케줄러 (실시간)</title>
+    <title>Scheduler</title>
     
-    <!-- Firebase 실시간 데이터베이스를 사용하기 위한 라이브러리 불러오기 -->
+    <!-- Firebase 실시간 데이터베이스 및 인증 라이브러리 추가 -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
     <style>
         body { 
@@ -44,6 +45,10 @@
         #btn-tutor { background-color: #4A90E2; color: white; }
         #btn-student { background-color: #F5A623; color: white; }
         #btn-result { background-color: #4CAF50; color: white; font-size: 1em;}
+        
+        #btn-save, #btn-load { font-size: 0.85em; padding: 10px 15px; }
+        #btn-save { background-color: #8E44AD; color: white; }
+        #btn-load { background-color: #2C3E50; color: white; }
         #btn-ical { font-size: 0.85em; padding: 10px 15px; background-color: #E74C3C; color: white; }
 
         #mode-text { margin-bottom: 5px; font-size: 1em; color: #333; line-height: 1.4; }
@@ -94,11 +99,48 @@
         @media (min-width: 768px) {
             .cell:hover { background-color: #e9e9e9; }
         }
+
+        /* 로그인 오버레이 스타일 */
+        #login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.75);
+            z-index: 9999;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .login-box {
+            background: white; padding: 30px; border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            text-align: center; width: 280px;
+        }
+        .login-box input {
+            width: 80%; padding: 12px; margin: 8px 0;
+            font-size: 1.1em; text-align: left; 
+            border: 2px solid #ccc; border-radius: 8px;
+        }
+        .login-btn { width: 90%; margin-top: 15px; font-size: 1.1em; background-color: #4CAF50; color: white; }
+        
+        #logout-btn {
+            position: absolute; top: 10px; right: 10px;
+            padding: 8px 12px; font-size: 0.8em; background-color: #7f8c8d;
+        }
     </style>
 </head>
 <body>
 
-    <h2>수업 실시간 스케줄러</h2>
+    <!-- 로그인 오버레이 -->
+    <div id="login-overlay">
+        <div class="login-box">
+            <h2 style="margin-top: 0;">스케줄러 접속</h2>
+            <p style="font-size: 0.9em; color: #666;">계정 정보를 입력하세요.</p>
+            <input type="email" id="email-input" placeholder="이메일">
+            <input type="password" id="password-input" placeholder="비밀번호">
+            <button class="login-btn" onclick="attemptLogin()">로그인</button>
+            <p id="login-error" style="color: red; font-size: 0.85em; display: none;">정보가 일치하지 않습니다.</p>
+        </div>
+    </div>
+
+    <button id="logout-btn" onclick="logout()" style="display: none;">로그아웃</button>
+    <h2>Scheduler</h2>
     
     <div class="controls">
         <select id="week-selector" onchange="changeWeek()"></select>
@@ -107,14 +149,15 @@
         <button id="btn-student" onclick="setMode('student')">학생 일정</button>
         <button id="btn-result" onclick="showResult()">매칭 결과</button>
         <br>
+        <button id="btn-save" onclick="saveData()">💾 일정 백업</button>
+        <button id="btn-load" onclick="document.getElementById('file-input').click()">📂 파일 열기</button>
+        <input type="file" id="file-input" style="display: none;" accept=".json" onchange="handleFileLoad(event)">
+        
         <input type="text" id="event-name" placeholder="일정 이름 입력" style="padding: 10px; margin: 4px; border-radius: 8px; border: 1px solid #ccc; font-size: 0.85em; width: 120px; text-align: center; vertical-align: middle;">
-        <button id="btn-ical" onclick="exportICal()">📅 캘린더로 내보내기</button>
+        <button id="btn-ical" onclick="exportICal()">📅 캘린더 내보내기</button>
     </div>
     
-    <div id="mode-text">
-        <b>선생님 일정 입력 (파란색)</b><br>
-        <small>PC는 드래그, 모바일은 화면을 터치</small>
-    </div>
+    <div id="mode-text"></div>
     <div id="sync-status">🟡 서버에 연결 중...</div>
 
     <div class="table-container">
@@ -122,9 +165,6 @@
     </div>
 
     <script>
-        // ==========================================
-        // 1. 파이어베이스(서버) 연결 설정
-        // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyBWQvoSrlT20FLyIW75GLo38lwo0uKE-_Q",
             authDomain: "lesson-scheduler-f3d37.firebaseapp.com",
@@ -138,11 +178,56 @@
         
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        const scheduleRef = db.ref('shared_schedule'); // 데이터베이스 저장 공간 이름
+        const auth = firebase.auth();
+        const scheduleRef = db.ref('shared_schedule'); 
 
-        // ==========================================
-        // 2. 기본 데이터 및 UI 변수 세팅
-        // ==========================================
+        let loggedInRole = null; 
+
+        function attemptLogin() {
+            const email = document.getElementById('email-input').value.trim();
+            const password = document.getElementById('password-input').value;
+            const errorMsg = document.getElementById('login-error');
+            
+            errorMsg.style.display = 'none';
+
+            // 1. Firebase Auth로 이메일/비밀번호 확인
+            auth.signInWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    const uid = userCredential.user.uid;
+                    
+                    // 2. 서버(Database)에서 해당 UID의 진짜 권한 조회
+                    db.ref('roles/' + uid).once('value').then((snapshot) => {
+                        const role = snapshot.val(); // 서버가 내려주는 권한 ('tutor' 또는 'student')
+                        
+                        if (role === 'tutor' || role === 'student') {
+                            loggedInRole = role;
+                            document.getElementById('login-overlay').style.display = 'none';
+                            document.getElementById('logout-btn').style.display = 'block';
+                            setMode(loggedInRole); 
+                        } else {
+                            // DB에 권한이 등록되지 않은 사용자인 경우
+                            errorMsg.innerText = "서버에 권한이 등록되지 않은 사용자입니다.";
+                            errorMsg.style.display = 'block';
+                            auth.signOut();
+                        }
+                    }).catch((err) => {
+                        errorMsg.innerText = "권한 정보를 불러오지 못했습니다.";
+                        errorMsg.style.display = 'block';
+                    });
+                })
+                .catch((error) => {
+                    errorMsg.innerText = "아이디 또는 비밀번호가 일치하지 않습니다.";
+                    errorMsg.style.display = 'block';
+                    console.error("로그인 실패:", error);
+                });
+        }
+
+        function logout() {
+            auth.signOut().then(() => {
+                location.reload(); 
+            });
+        }
+
         let currentMode = 'tutor'; 
         let tutorData = {};
         let studentData = {};
@@ -179,7 +264,6 @@
             }
         }
 
-        // 초기 빈 데이터 생성
         for (let day of daysArr) {
             for (let time of times) {
                 const cellId = `${day.id}-${time}`;
@@ -229,25 +313,45 @@
 
         buildTable(0);
 
-        // ==========================================
-        // 3. 상호작용 및 서버 자동 동기화 로직
-        // ==========================================
         document.body.addEventListener('mouseup', stopDrag);
         document.body.addEventListener('touchend', stopDrag);
+
+        function showMessage(msg) {
+            const modeText = document.getElementById('mode-text');
+            const originalHtml = modeText.innerHTML;
+            modeText.innerHTML = `<b style="color: #e74c3c; font-size: 1.1em;">${msg}</b>`;
+            setTimeout(() => { modeText.innerHTML = originalHtml; }, 2000); 
+        }
 
         function setMode(mode) {
             currentMode = mode;
             let msg = "";
-            if (mode === 'tutor') msg = "<b>선생님 일정 입력 (파란색)</b><br><small>PC는 드래그, 모바일은 터치하여 체크</small>";
-            else if (mode === 'student') msg = "<b>학생 일정 입력 (주황색)</b><br><small>PC는 드래그, 모바일은 터치하여 체크</small>";
+            if (mode === 'tutor') {
+                if (loggedInRole === 'tutor') msg = "<b>선생님 일정 입력 (파란색)</b><br><small>불가능한 시간을 드래그/터치하여 체크하세요.</small>";
+                else msg = "<b>선생님 일정 (조회 전용)</b><br><small>학생은 선생님 일정을 수정할 수 없습니다.</small>";
+            }
+            else if (mode === 'student') {
+                if (loggedInRole === 'student') msg = "<b>학생 일정 입력 (주황색)</b><br><small>불가능한 시간을 드래그/터치하여 체크하세요.</small>";
+                else msg = "<b>학생 일정 (조회 전용)</b><br><small>선생님은 학생 일정을 수정할 수 없습니다.</small>";
+            }
             document.getElementById('mode-text').innerHTML = msg;
             renderTable();
         }
 
         function toggleCell(cellId) {
-            if (currentMode === 'tutor') tutorData[cellId] = !tutorData[cellId];
-            else if (currentMode === 'student') studentData[cellId] = !studentData[cellId];
-            else if (currentMode === 'result' && !tutorData[cellId] && !studentData[cellId]) classData[cellId] = !classData[cellId];
+            if (currentMode === 'tutor') {
+                if (loggedInRole !== 'tutor') { showMessage("권한이 없습니다. (조회만 가능)"); return; }
+                tutorData[cellId] = !tutorData[cellId];
+            } 
+            else if (currentMode === 'student') {
+                if (loggedInRole !== 'student') { showMessage("권한이 없습니다. (조회만 가능)"); return; }
+                studentData[cellId] = !studentData[cellId];
+            } 
+            else if (currentMode === 'result') {
+                if (!tutorData[cellId] && !studentData[cellId]) {
+                    classData[cellId] = !classData[cellId];
+                }
+            }
             renderTable();
         }
 
@@ -263,7 +367,7 @@
         function stopDrag() {
             if (isDragging) {
                 isDragging = false;
-                saveToServer(); // 드래그(또는 클릭)가 끝나면 서버로 자동 저장!
+                saveToServer(); 
             }
         }
 
@@ -300,11 +404,10 @@
 
         function showResult() {
             currentMode = 'result';
-            document.getElementById('mode-text').innerHTML = "<b>매칭 결과 및 수업 확정</b><br><small>'OK' 칸을 터치하여 최종 수업 일시를 확정</small>";
+            document.getElementById('mode-text').innerHTML = "<b>매칭 결과 및 수업 확정</b><br><small>'OK' 칸을 터치하여 최종 수업 일시를 확정하세요.</small>";
             renderTable();
         }
 
-        // --- 실시간 서버 저장/불러오기 함수 ---
         function saveToServer() {
             document.getElementById('sync-status').innerHTML = "⏳ 서버에 저장 중...";
             scheduleRef.set({
@@ -312,37 +415,72 @@
                 student: studentData,
                 classTime: classData
             }).then(() => {
-                document.getElementById('sync-status').innerHTML = "🟢 실시간 연결됨";
+                document.getElementById('sync-status').innerHTML = "🟢 실시간 연결됨 (저장 완료)";
             }).catch((error) => {
                 document.getElementById('sync-status').innerHTML = "🔴 저장 실패";
                 console.error(error);
             });
         }
 
-        // 누군가 데이터를 변경하면 실시간으로 내 화면도 업데이트 됨
         scheduleRef.on('value', (snapshot) => {
-            if (isDragging) return; // 내가 드래그 입력 중일 때는 덮어쓰기 방지
+            if (isDragging) return; 
 
             const data = snapshot.val();
             if (data) {
                 if (data.tutor) tutorData = Object.assign(tutorData, data.tutor);
                 if (data.student) studentData = Object.assign(studentData, data.student);
                 if (data.classTime) classData = Object.assign(classData, data.classTime);
-                renderTable();
+                
+                if(loggedInRole !== null) renderTable(); 
                 
                 document.getElementById('sync-status').innerHTML = "✨ 최신 데이터 불러옴";
                 setTimeout(() => {
                     document.getElementById('sync-status').innerHTML = "🟢 실시간 연결됨";
                 }, 2000);
-            } else {
-                document.getElementById('sync-status').innerHTML = "🟢 실시간 연결됨 (새 일정)";
             }
         });
 
+        function saveData() {
+            const dataToSave = { tutor: tutorData, student: studentData, classTime: classData };
+            const dataStr = JSON.stringify(dataToSave);
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "lesson_schedule.json";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showMessage("일정이 파일로 백업되었습니다.");
+        }
 
-        // ==========================================
-        // 4. iCal 내보내기 로직 (변경 없음)
-        // ==========================================
+        function handleFileLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const loadedData = JSON.parse(e.target.result);
+                    if (loadedData.tutor && loadedData.student) {
+                        tutorData = Object.assign(tutorData, loadedData.tutor);
+                        studentData = Object.assign(studentData, loadedData.student);
+                        classData = Object.assign(classData, loadedData.classTime || {});
+                        
+                        renderTable();
+                        saveToServer(); 
+                        showMessage("성공적으로 일정을 불러와 서버에 적용했습니다.");
+                    } else {
+                        showMessage("잘못된 파일 형식입니다.");
+                    }
+                } catch (error) {
+                    showMessage("파일을 읽는 중 오류가 발생했습니다.");
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
         function getIcsDateStr(year, month, date, hour) {
             const pad = (n) => String(n).padStart(2, '0');
             const d = new Date(year, month - 1, date, hour); 
@@ -381,7 +519,7 @@
                         icsContent += "BEGIN:VEVENT\r\n";
                         icsContent += `DTSTART:${startStr}\r\n`; 
                         icsContent += `DTEND:${endStr}\r\n`;
-                        icsContent += `SUMMARY:${eventName}\r\n`;
+                        icsContent += `SUMMARY:${eventName}\r\n`; 
                         icsContent += "END:VEVENT\r\n";
                         
                         startHr = null; 
@@ -394,7 +532,7 @@
             icsContent += "END:VCALENDAR\r\n";
 
             if (eventCount === 0) {
-                alert("확정된(★) 수업 일정이 없습니다.");
+                showMessage("확정된(★) 수업 일정이 없습니다.");
                 return;
             }
             
@@ -408,7 +546,7 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            alert(`${eventCount}개의 일정이 캘린더 파일로 저장되었습니다!`);
+            showMessage(`${eventCount}개의 일정이 캘린더 파일로 저장되었습니다!`);
         }
     </script>
 </body>
