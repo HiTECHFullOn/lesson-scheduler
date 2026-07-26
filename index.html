@@ -136,7 +136,7 @@
         <div class="login-box">
             <h2 style="margin-top: 0;">로그인</h2>
             <p style="font-size: 0.9em; color: #666;">계정 정보를 입력하세요.</p>
-            <input type="email" id="email-input" placeholder="이메일">
+            <input type="text" id="email-input" placeholder="아이디">
             <input type="password" id="password-input" placeholder="비밀번호">
             <button class="login-btn" onclick="attemptLogin()">로그인</button>
             <p id="login-error" style="color: red; font-size: 0.85em; display: none;">정보를 확인 중입니다...</p>
@@ -224,7 +224,10 @@
         });
 
         function attemptLogin() {
-            const email = document.getElementById('email-input').value.trim();
+            let idValue = document.getElementById('email-input').value.trim();
+            // 입력한 아이디에 자동으로 가짜 이메일 도메인 추가 (이미 @가 있으면 그대로 사용)
+            const email = idValue.includes('@') ? idValue : idValue + "@mail.com";
+            
             const password = document.getElementById('password-input').value;
             const errorMsg = document.getElementById('login-error');
             
