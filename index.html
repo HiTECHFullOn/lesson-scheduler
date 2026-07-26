@@ -343,7 +343,7 @@
             // 사용자 입력 이름 가져오기 (입력란이 비어있으면 기본값 적용)
             let eventName = document.getElementById('event-name').value.trim();
             if (!eventName) {
-                eventName = "수학 과외";
+                eventName = "이은";
             }
 
             let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//과외 스케줄 매칭기//KO\r\n";
@@ -404,6 +404,36 @@
             
             showMessage(`${eventCount}개의 일정이 캘린더 파일로 저장되었습니다!`);
         }
+
+        // 서버(GitHub)에서 기본 일정 파일(default_schedule.json) 자동 불러오기
+        async function loadDefaultSchedule() {
+            try {
+                // 브라우저 캐시로 인해 옛날 일정이 보이는 것을 방지하기 위해 쿼리스트링 추가
+                const response = await fetch('default_schedule.json?t=' + new Date().getTime());
+                
+                if (!response.ok) {
+                    // 파일이 없으면 조용히 넘어감 (빈 달력 표시)
+                    console.log("기본 일정 파일(default_schedule.json)이 서버에 없습니다.");
+                    return;
+                }
+                
+                const loadedData = await response.json();
+                if (loadedData.tutor && loadedData.student) {
+                    tutorData = Object.assign(tutorData, loadedData.tutor);
+                    studentData = Object.assign(studentData, loadedData.student);
+                    classData = Object.assign(classData, loadedData.classTime || {});
+                    renderTable();
+                    console.log("서버에서 기본 일정을 성공적으로 불러왔습니다.");
+                }
+            } catch (error) {
+                console.log("기본 일정 파일을 읽는 중 오류가 발생했습니다.", error);
+            }
+        }
+
+        // 페이지가 열리면 즉시 기본 일정 불러오기 실행
+        window.addEventListener('DOMContentLoaded', () => {
+            loadDefaultSchedule();
+        });
     </script>
 </body>
 </html>
