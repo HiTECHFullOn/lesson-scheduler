@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <!-- 모바일 최적화: 화면 배율 고정 및 더블 탭 확대 방지 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scheduler</title>
+    <style>
+        body { 
+            font-family: 'Malgun Gothic', sans-serif; 
+            text-align: center; 
+            margin: 10px; 
+            background-color: #f9f9f9;
+            touch-action: manipulation;
+        }
+        h2 { margin-bottom: 10px; font-size: 1.5em; }
+        .controls { margin-bottom: 15px; }
+        
+        select {
+            padding: 12px; 
+            margin: 5px; 
+            font-size: 1em;
+            font-weight: bold; 
+            border-radius: 8px; 
+            border: 2px solid #ccc; 
+            cursor: pointer;
+            background-color: white;
+        }
+
+        button { 
+            padding: 12px 15px; 
+            margin: 4px; 
+            cursor: pointer; 
+            border: none; 
+            border-radius: 8px; 
+            font-weight: bold; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            font-size: 0.9em;
+        }
+        #btn-tutor { background-color: #4A90E2; color: white; }
+        #btn-student { background-color: #F5A623; color: white; }
+        #btn-result { background-color: #4CAF50; color: white; font-size: 1em;}
+        
+        #btn-save, #btn-load { font-size: 0.85em; padding: 10px 15px; }
+        #btn-ical { font-size: 0.85em; padding: 10px 15px; background-color: #E74C3C; color: white; }
+
+        #mode-text { margin-bottom: 15px; font-size: 1em; color: #333; line-height: 1.4; }
+
+        .table-container {
+            max-width: 100vw;
+            max-height: 60vh; 
+            overflow: auto;
+            margin: 0 auto;
+            border: 1px solid #ccc;
+            background-color: white;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        table { 
+            width: 100%; 
+            table-layout: fixed; 
+            border-collapse: collapse; 
+            user-select: none;
+            -webkit-user-select: none; 
+        }
+        th, td { 
+            border: 1px solid #ddd; 
+            min-width: 40px; 
+            height: 40px; 
+            text-align: center; 
+            font-size: 0.85em;
+            word-break: keep-all; 
+        }
+        
+        th { position: sticky; top: 0; background-color: #f4f4f4; z-index: 1; padding: 3px; }
+        td:first-child, th:first-child { 
+            width: 50px; 
+            position: sticky; left: 0; background-color: #f4f4f4; z-index: 2; font-weight: bold;
+        }
+        th:first-child { z-index: 3; }
+
+        .sat { color: blue; }
+        .sun { color: red; }
+        
+        .tutor-busy { background-color: #a0c4ff !important; }
+        .student-busy { background-color: #ffd6a5 !important; }
+        .match-free { background-color: #caffbf !important; font-weight: bold; }
+        .class-selected { background-color: #2ecc71 !important; color: #fff !important; font-weight: bold; }
+        
+        .cell { cursor: pointer; background-color: white; transition: background-color 0.1s; }
+        @media (min-width: 768px) {
+            .cell:hover { background-color: #e9e9e9; }
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Scheduler</h2>
+    
+    <div class="controls">
+        <select id="week-selector" onchange="changeWeek()"></select>
+        <br>
+        <button id="btn-tutor" onclick="setMode('tutor')">선생님 일정</button>
+        <button id="btn-student" onclick="setMode('student')">학생 일정</button>
+        <button id="btn-result" onclick="showResult()">매칭 결과</button>
+        <br>
+        <button id="btn-save" onclick="saveData()" style="background-color: #8E44AD; color: white;">💾 일정 저장</button>
+        <button id="btn-load" onclick="document.getElementById('file-input').click()" style="background-color: #2C3E50; color: white;">📂 파일 열기</button>
+        <input type="file" id="file-input" style="display: none;" accept=".json" onchange="handleFileLoad(event)">
+        
+        <!-- 새로운 iCal 내보내기 버튼 및 일정 이름 입력란 -->
+        <input type="text" id="event-name" placeholder="일정 이름 입력" style="padding: 10px; margin: 4px; border-radius: 8px; border: 1px solid #ccc; font-size: 0.85em; width: 120px; text-align: center; vertical-align: middle;">
+        <button id="btn-ical" onclick="exportICal()">📅 캘린더로 내보내기</button>
+    </div>
+    
+    <div id="mode-text">
+        <b>선생님 일정 입력 (파란색)</b><br>
+        <small>PC는 드래그, 모바일은 화면을 터치</small>
+    </div>
+
+    <div class="table-container">
+        <table id="schedule-table"></table>
+    </div>
+
+    <script>
+        let currentMode = 'tutor'; 
+        let tutorData = {};
+        let studentData = {};
+        let classData = {};
+        let isDragging = false;
+
+        const times = [];
+        for (let i = 0; i < 24; i++) times.push(`${i.toString().padStart(2, '0')}:00`);
+
+        const startDate = new Date(2026, 6, 26);
+        const endDate = new Date(2026, 8, 30);
+        const daysArr = [];
+        const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+        // 날짜 배열 생성 (iCal을 위해 년/월/일 정보 구체적으로 저장)
+        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+            const year = d.getFullYear();
+            const month = d.getMonth() + 1;
+            const date = d.getDate();
+            const dayNum = d.getDay();
+            let dayClass = dayNum === 0 ? 'sun' : (dayNum === 6 ? 'sat' : '');
+            daysArr.push({ 
+                label: `${month}/${date}<br><span class="${dayClass}">(${dayNames[dayNum]})</span>`, 
+                id: `${month}-${date}`, 
+                dayNum: dayNum,
+                year: year,
+                month: month,
+                date: date
+            });
+        }
+
+        const weeks = [];
+        let tempWeek = [];
+        for (let i = 0; i < daysArr.length; i++) {
+            tempWeek.push(daysArr[i]);
+            if (daysArr[i].dayNum === 6 || i === daysArr.length - 1) {
+                weeks.push(tempWeek);
+                tempWeek = [];
+            }
+        }
+
+        for (let day of daysArr) {
+            for (let time of times) {
+                const cellId = `${day.id}-${time}`;
+                tutorData[cellId] = false;
+                studentData[cellId] = false;
+                classData[cellId] = false;
+            }
+        }
+
+        const weekSelector = document.getElementById('week-selector');
+        for (let i = 0; i < weeks.length; i++) {
+            const firstDay = weeks[i][0];
+            const lastDay = weeks[i][weeks[i].length - 1];
+            weekSelector.innerHTML += `<option value="${i}">${i + 1}주차 (${firstDay.id.replace('-', '/')} ~ ${lastDay.id.replace('-', '/')})</option>`;
+        }
+
+        let currentWeekIndex = 0;
+
+        function buildTable(weekIdx) {
+            const table = document.getElementById('schedule-table');
+            table.innerHTML = ''; 
+            const weekDays = weeks[weekIdx];
+            
+            let headerRow = '<tr><th>시간</th>';
+            for (let day of weekDays) headerRow += `<th>${day.label}</th>`;
+            headerRow += '</tr>';
+            table.innerHTML += headerRow;
+
+            for (let time of times) {
+                let row = `<tr><td>${time}</td>`;
+                for (let day of weekDays) {
+                    const cellId = `${day.id}-${time}`;
+                    row += `<td class="cell" id="${cellId}" 
+                                onmousedown="startDrag('${cellId}')" 
+                                onmouseenter="dragEnter('${cellId}')"></td>`;
+                }
+                row += '</tr>';
+                table.innerHTML += row;
+            }
+            renderTable();
+        }
+
+        function changeWeek() {
+            currentWeekIndex = parseInt(document.getElementById('week-selector').value);
+            buildTable(currentWeekIndex);
+        }
+
+        buildTable(0);
+        
+        document.body.addEventListener('mouseup', stopDrag);
+        document.body.addEventListener('touchend', stopDrag);
+
+        function setMode(mode) {
+            currentMode = mode;
+            let msg = "";
+            if (mode === 'tutor') msg = "<b>선생님 일정 입력 (파란색)</b><br><small>PC는 드래그, 모바일은 터치하여 체크</small>";
+            else if (mode === 'student') msg = "<b>학생 일정 입력 (주황색)</b><br><small>PC는 드래그, 모바일은 터치하여 체크</small>";
+            document.getElementById('mode-text').innerHTML = msg;
+            renderTable();
+        }
+
+        function toggleCell(cellId) {
+            if (currentMode === 'tutor') tutorData[cellId] = !tutorData[cellId];
+            else if (currentMode === 'student') studentData[cellId] = !studentData[cellId];
+            else if (currentMode === 'result' && !tutorData[cellId] && !studentData[cellId]) classData[cellId] = !classData[cellId];
+            renderTable();
+        }
+
+        function startDrag(cellId) {
+            isDragging = true;
+            toggleCell(cellId);
+        }
+
+        function dragEnter(cellId) {
+            if (isDragging) toggleCell(cellId);
+        }
+
+        function stopDrag() {
+            isDragging = false;
+        }
+
+        function renderTable() {
+            for (let day of daysArr) {
+                for (let time of times) {
+                    const cellId = `${day.id}-${time}`;
+                    const cell = document.getElementById(cellId);
+                    if (!cell) continue; 
+                    
+                    cell.className = 'cell';
+                    cell.innerText = '';
+
+                    if (currentMode === 'tutor' && tutorData[cellId]) {
+                        cell.classList.add('tutor-busy');
+                        cell.innerText = 'X';
+                    } else if (currentMode === 'student' && studentData[cellId]) {
+                        cell.classList.add('student-busy');
+                        cell.innerText = 'X';
+                    } else if (currentMode === 'result') {
+                        if (!tutorData[cellId] && !studentData[cellId]) {
+                            if (classData[cellId]) {
+                                cell.classList.add('class-selected');
+                                cell.innerText = '★';
+                            } else {
+                                cell.classList.add('match-free');
+                                cell.innerText = 'OK';
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function showResult() {
+            currentMode = 'result';
+            document.getElementById('mode-text').innerHTML = "<b>매칭 결과 및 수업 확정</b><br><small>'OK' 칸을 터치하여 최종 수업 일시를 확정</small>";
+            renderTable();
+        }
+
+        function restoreModeText() {
+            if (currentMode === 'tutor') setMode('tutor');
+            else if (currentMode === 'student') setMode('student');
+            else if (currentMode === 'result') showResult();
+        }
+
+        function showMessage(msg) {
+            document.getElementById('mode-text').innerHTML = `<b style="color: #e74c3c; font-size: 1.1em;">${msg}</b>`;
+            setTimeout(restoreModeText, 3500); 
+        }
+
+        function saveData() {
+            const dataToSave = { tutor: tutorData, student: studentData, classTime: classData };
+            const dataStr = JSON.stringify(dataToSave);
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "과외스케줄.json";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showMessage("일정이 저장되었습니다.");
+        }
+
+        function handleFileLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const loadedData = JSON.parse(e.target.result);
+                    if (loadedData.tutor && loadedData.student) {
+                        tutorData = Object.assign(tutorData, loadedData.tutor);
+                        studentData = Object.assign(studentData, loadedData.student);
+                        classData = Object.assign(classData, loadedData.classTime || {});
+                        renderTable();
+                        showMessage("성공적으로 일정을 불러왔습니다.");
+                    } else {
+                        showMessage("잘못된 파일 형식입니다.");
+                    }
+                } catch (error) {
+                    showMessage("파일을 읽는 중 오류가 발생했습니다.");
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function getIcsDateStr(year, month, date, hour) {
+            const pad = (n) => String(n).padStart(2, '0');
+            // 자정(24시)을 다음날 00시로 자동 계산해주는 Date 객체 활용
+            const d = new Date(year, month - 1, date, hour); 
+            return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}0000`;
+        }
+
+        function exportICal() {
+            // 사용자 입력 이름 가져오기 (입력란이 비어있으면 기본값 적용)
+            let eventName = document.getElementById('event-name').value.trim();
+            if (!eventName) {
+                eventName = "수학 과외";
+            }
+
+            let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//과외 스케줄 매칭기//KO\r\n";
+            let eventCount = 0;
+            
+            for (let day of daysArr) {
+                let startHr = null;
+                let endHr = null;
+                
+                for (let i = 0; i < times.length; i++) {
+                    const time = times[i]; 
+                    const cellId = `${day.id}-${time}`;
+                    const isConfirmed = classData[cellId];
+                    
+                    if (isConfirmed) {
+                        if (startHr === null) {
+                            startHr = parseInt(time.split(':')[0]);
+                            endHr = startHr + 1; // 1시간 단위
+                        } else {
+                            endHr++; // 연속된 시간이면 종료 시간만 1시간 연장
+                        }
+                    } 
+                    
+                    // 확정된 시간이 끝났거나, 하루가 끝났을 때 이벤트를 파일에 작성
+                    if ((!isConfirmed || i === times.length - 1) && startHr !== null) {
+                        const startStr = getIcsDateStr(day.year, day.month, day.date, startHr);
+                        const endStr = getIcsDateStr(day.year, day.month, day.date, endHr);
+                        
+                        icsContent += "BEGIN:VEVENT\r\n";
+                        icsContent += `DTSTART:${startStr}\r\n`; // 로컬 시간 기준 적용
+                        icsContent += `DTEND:${endStr}\r\n`;
+                        icsContent += `SUMMARY:${eventName}\r\n`;
+                        icsContent += "END:VEVENT\r\n";
+                        
+                        startHr = null; 
+                        endHr = null;
+                        eventCount++;
+                    }
+                }
+            }
+            
+            icsContent += "END:VCALENDAR\r\n";
+
+            if (eventCount === 0) {
+                showMessage("확정된(★) 수업 일정이 없습니다.");
+                return;
+            }
+            
+            const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "lessons.ics";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showMessage(`${eventCount}개의 일정이 캘린더 파일로 저장되었습니다!`);
+        }
+    </script>
+</body>
+</html>
