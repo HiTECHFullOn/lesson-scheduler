@@ -81,14 +81,37 @@
         }
         
         th { position: sticky; top: 0; background-color: #f4f4f4; z-index: 1; padding: 3px; }
+        
+        /* 시간축 (첫 번째 열) 디자인 개선 */
         td:first-child, th:first-child { 
-            width: 50px; 
-            position: sticky; left: 0; background-color: #f4f4f4; z-index: 2; font-weight: bold;
+            width: 60px; 
+            position: sticky; left: 0; background-color: #f4f4f4; z-index: 2;
         }
-        th:first-child { z-index: 3; }
+        th:first-child { z-index: 3; font-weight: bold; }
+        td:first-child {
+            border-top: none; 
+            border-bottom: none; 
+            border-left: none;
+            vertical-align: top; /* 텍스트를 칸의 맨 위로 올림 */
+            text-align: right;   /* 표에 가깝게 우측 정렬 */
+            padding-top: 0;
+            padding-right: 5px;  /* 선과의 여백 */
+            font-weight: normal; 
+        }
+        
+        /* 시간 텍스트가 가로선(정각)에 정확히 걸치도록 위로 당김 */
+        .time-label {
+            position: relative;
+            top: -9px; 
+            font-size: 0.8em;
+            color: #777; /* 너무 튀지 않는 차분한 색상 */
+        }
 
         .sat { color: blue; }
         .sun { color: red; }
+        
+        /* 오늘 날짜 하이라이트 */
+        th.today-col { background-color: #ffe699 !important; font-weight: 900; color: #d35400; border-bottom: 2px solid #d35400; }
         
         /* 칠해진 상태 */
         .tutor-busy { background-color: #a0c4ff !important; }
@@ -199,11 +222,10 @@
         // ==========================================
         let loggedInRole = null; 
         let dbListener = null; 
-        let isDataLoaded = false; // 🔥 핵심 방어 장치: 데이터 로드 상태 플래그
+        let isDataLoaded = false; 
 
         auth.onAuthStateChanged((user) => {
             if (user) {
-                // 로그인 된 상태면 DB에서 권한 조회
                 db.ref('roles/' + user.uid).once('value').then((snapshot) => {
                     const role = snapshot.val(); 
                     
@@ -220,7 +242,6 @@
                     }
                 });
             } else {
-                // 로그아웃 상태일 때만 로그인 박스를 표시 (깜빡임 방지)
                 showLoginBox();
             }
         });
@@ -317,6 +338,17 @@
         }
 
         let currentWeekIndex = 0;
+        const today = new Date();
+        
+        // 오늘 날짜가 속한 주차를 기본값으로 설정
+        for (let i = 0; i < weeks.length; i++) {
+            const hasToday = weeks[i].some(d => d.year === today.getFullYear() && d.month === (today.getMonth() + 1) && d.date === today.getDate());
+            if (hasToday) {
+                currentWeekIndex = i;
+                break;
+            }
+        }
+        if (weekSelector.options.length > 0) weekSelector.value = currentWeekIndex;
 
         function buildTable(weekIdx) {
             const table = document.getElementById('schedule-table');
@@ -324,12 +356,25 @@
             const weekDays = weeks[weekIdx];
             
             let headerRow = '<tr><th>시간</th>';
-            for (let day of weekDays) headerRow += `<th>${day.label}</th>`;
+            for (let day of weekDays) {
+                // 오늘 날짜인지 확인하여 CSS 클래스 추가
+                const isToday = (day.year === today.getFullYear() && day.month === (today.getMonth() + 1) && day.date === today.getDate());
+                const todayClass = isToday ? 'today-col' : '';
+                headerRow += `<th class="${todayClass}">${day.label}</th>`;
+            }
             headerRow += '</tr>';
             table.innerHTML += headerRow;
 
             for (let time of times) {
-                let row = `<tr><td>${time}</td>`;
+                // 24시간제를 12시간제(오전/오후/자정/정오)로 변환
+                let formattedTime = time;
+                const hr = parseInt(time.split(':')[0]);
+                if (hr === 0) formattedTime = "자정";
+                else if (hr === 12) formattedTime = "정오";
+                else if (hr < 12) formattedTime = `오전 ${hr}시`;
+                else formattedTime = `오후 ${hr - 12}시`;
+
+                let row = `<tr><td><span class="time-label">${formattedTime}</span></td>`;
                 for (let day of weekDays) {
                     const cellId = `${day.id}-${time}`;
                     row += `<td class="cell" id="${cellId}" 
@@ -347,7 +392,7 @@
             buildTable(currentWeekIndex);
         }
 
-        buildTable(0);
+        buildTable(currentWeekIndex); 
 
         // ==========================================
         // 4. 상호작용 및 UI 업데이트 로직
@@ -395,7 +440,6 @@
         }
 
         function startDrag(cellId) {
-            // 🔥 핵심 방어 장치: 서버 데이터를 불러오기 전에는 조작 불가
             if (!isDataLoaded) {
                 showMessage("⏳ 서버 동기화 중입니다. 잠시만 기다려주세요.");
                 return;
@@ -412,7 +456,7 @@
         function stopDrag() {
             if (isDragging) {
                 isDragging = false;
-                saveToServer(); 
+                saveToServer(); // 드래그 완료 시 부분 업데이트
             }
         }
 
@@ -424,24 +468,25 @@
                     if (!cell) continue; 
                     
                     cell.className = 'cell';
+                    
                     cell.innerHTML = '';
-                    cell.style.backgroundColor = ''; 
+                    cell.style.backgroundColor = ''; // 스타일 초기화
 
                     if (currentMode === 'tutor') {
                         if (tutorData[cellId]) {
                             cell.classList.add('tutor-busy');
-                            cell.innerText = 'X';
+                            // 'X' 텍스트 제거
                         } else if (studentData[cellId]) {
                             cell.classList.add('other-bg');
-                            cell.innerHTML = '학생불가';
+                            cell.innerHTML = '학생 OFF';
                         }
                     } else if (currentMode === 'student') {
                         if (studentData[cellId]) {
                             cell.classList.add('student-busy');
-                            cell.innerText = 'X';
+                            // 'X' 텍스트 제거
                         } else if (tutorData[cellId]) {
                             cell.classList.add('other-bg');
-                            cell.innerHTML = '선생불가';
+                            cell.innerHTML = '선생님 OFF';
                         }
                     } else if (currentMode === 'result') {
                         if (!tutorData[cellId] && !studentData[cellId]) {
@@ -450,7 +495,7 @@
                                 cell.innerText = '★';
                             } else {
                                 cell.classList.add('match-free');
-                                cell.innerText = 'OK';
+                                // 'OK' 텍스트 제거
                             }
                         }
                     }
@@ -460,7 +505,7 @@
 
         function showResult() {
             currentMode = 'result';
-            document.getElementById('mode-text').innerHTML = "<b>매칭 결과 및 수업 확정</b><br><small>'OK' 칸을 터치하여 최종 수업 일시를 확정하세요.</small>";
+            document.getElementById('mode-text').innerHTML = "<b>매칭 결과 및 수업 확정</b><br><small>초록색 칸을 터치하여 최종 수업 일시를 확정하세요.</small>";
             renderTable();
         }
 
@@ -468,7 +513,7 @@
         // 5. 서버 저장 및 실시간 동기화
         // ==========================================
         function saveToServer() {
-            if (!loggedInRole || !isDataLoaded) return; // 로드 완료 전 저장 원천 차단
+            if (!loggedInRole || !isDataLoaded) return; 
             
             document.getElementById('sync-status').innerHTML = "⏳ 서버에 저장 중...";
             
@@ -507,7 +552,6 @@
                     document.getElementById('sync-status').innerHTML = "🟢 실시간 연결됨 (데이터 없음)";
                 }
                 
-                // 🔥 서버 데이터 확인 완료! 이제부터 터치(입력) 허용
                 isDataLoaded = true; 
 
             }, (error) => {
@@ -565,7 +609,7 @@
         }
 
         // ==========================================
-        // 7. iCal 내보내기 로직
+        // 7. iCal 내보내기 로직 (미래 시점 필터링 추가)
         // ==========================================
         function getIcsDateStr(year, month, date, hour) {
             const pad = (n) => String(n).padStart(2, '0');
@@ -579,6 +623,7 @@
 
             let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//lesson scheduler//KO\r\n";
             let eventCount = 0;
+            const now = new Date(); // 현재 시간 기준점
             
             for (let day of daysArr) {
                 let startHr = null;
@@ -599,18 +644,25 @@
                     } 
                     
                     if ((!isConfirmed || i === times.length - 1) && startHr !== null) {
-                        const startStr = getIcsDateStr(day.year, day.month, day.date, startHr);
-                        const endStr = getIcsDateStr(day.year, day.month, day.date, endHr);
-                        
-                        icsContent += "BEGIN:VEVENT\r\n";
-                        icsContent += `DTSTART:${startStr}\r\n`; 
-                        icsContent += `DTEND:${endStr}\r\n`;
-                        icsContent += `SUMMARY:${eventName}\r\n`; 
-                        icsContent += "END:VEVENT\r\n";
-                        
+                        // 추출된 일정의 시작 시각을 Date 객체로 생성
+                        const eventStartTime = new Date(day.year, day.month - 1, day.date, startHr);
+
+                        // 생성된 일정이 현재 시각 이후인 경우에만 캘린더에 포함
+                        if (eventStartTime >= now) {
+                            const startStr = getIcsDateStr(day.year, day.month, day.date, startHr);
+                            const endStr = getIcsDateStr(day.year, day.month, day.date, endHr);
+                            
+                            icsContent += "BEGIN:VEVENT\r\n";
+                            icsContent += `DTSTART:${startStr}\r\n`; 
+                            icsContent += `DTEND:${endStr}\r\n`;
+                            icsContent += `SUMMARY:${eventName}\r\n`; 
+                            icsContent += "END:VEVENT\r\n";
+                            
+                            eventCount++;
+                        }
+
                         startHr = null; 
                         endHr = null;
-                        eventCount++;
                     }
                 }
             }
@@ -618,7 +670,7 @@
             icsContent += "END:VCALENDAR\r\n";
 
             if (eventCount === 0) {
-                alert("확정된(★) 수업 일정이 없습니다.");
+                alert("미래 시점(현재 이후)으로 확정된(★) 수업 일정이 없습니다.");
                 return;
             }
             
@@ -632,7 +684,7 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            alert(`${eventCount}개의 일정이 캘린더 파일로 저장되었습니다!`);
+            alert(`${eventCount}개의 미래 일정이 캘린더 파일로 저장되었습니다.`);
         }
     </script>
 </body>
