@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scheduler</title>
-    
+    <title>수업 스케줄러</title>
+
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗓️</text></svg>">
+    
     <!-- Firebase 실시간 데이터베이스 및 인증 라이브러리 추가 -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -57,7 +58,7 @@
 
         .table-container {
             max-width: 100vw;
-            max-height: 60vh; 
+            max-height: 80vh; /* 높이를 60vh에서 80vh로 늘림 */
             overflow: auto;
             margin: 0 auto;
             border: 1px solid #ccc;
@@ -85,7 +86,7 @@
         
         /* 맨 위 요일/날짜 칸은 넉넉한 높이 유지 */
         th { height: 45px; position: sticky; top: 0; background-color: #f4f4f4; z-index: 1; padding: 3px; }
-          
+        
         /* 시간축 (첫 번째 열) 디자인 개선 */
         td:first-child, th:first-child { 
             width: 60px; 
@@ -197,7 +198,7 @@
     <div id="mode-text"></div>
     <div id="sync-status">🟡 서버에 연결 대기 중...</div>
 
-    <div class="table-container">
+    <div class="table-container" id="scroll-container">
         <table id="schedule-table"></table>
     </div>
 
@@ -354,6 +355,14 @@
         }
         if (weekSelector.options.length > 0) weekSelector.value = currentWeekIndex;
 
+        // 스크롤 맨 아래로 내리는 함수
+        function scrollToBottom() {
+            const container = document.getElementById('scroll-container');
+            if(container) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
         function buildTable(weekIdx) {
             const table = document.getElementById('schedule-table');
             table.innerHTML = ''; 
@@ -389,6 +398,9 @@
                 table.innerHTML += row;
             }
             renderTable();
+            
+            // 테이블을 새로 그릴 때마다 스크롤을 맨 아래로 내림
+            setTimeout(scrollToBottom, 50); 
         }
 
         function changeWeek() {
@@ -674,7 +686,7 @@
             icsContent += "END:VCALENDAR\r\n";
 
             if (eventCount === 0) {
-                alert("미래 시점(현재 이후)으로 확정된(★) 수업 일정이 없습니다.");
+                alert("현재 시점 이후로 확정된(★) 수업 일정이 없습니다.");
                 return;
             }
             
