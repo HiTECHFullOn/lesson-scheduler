@@ -74,14 +74,17 @@
         th, td { 
             border: 1px solid #ddd; 
             min-width: 40px; 
-            height: 40px; 
             text-align: center; 
             font-size: 0.85em;
             word-break: keep-all; 
         }
         
-        th { position: sticky; top: 0; background-color: #f4f4f4; z-index: 1; padding: 3px; }
+        /* 스케줄 본문 칸 높이를 30px로 조정 */
+        td { height: 30px; } 
         
+        /* 맨 위 요일/날짜 칸은 넉넉한 높이 유지 */
+        th { height: 45px; position: sticky; top: 0; background-color: #f4f4f4; z-index: 1; padding: 3px; }
+          
         /* 시간축 (첫 번째 열) 디자인 개선 */
         td:first-child, th:first-child { 
             width: 60px; 
