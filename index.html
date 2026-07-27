@@ -3,10 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>수업 스케줄러</title>
+    <title>Scheduler</title></title>
 
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗓️</text></svg>">
-    
+    <!-- 1. 아이폰 홈 화면용 아이콘 (정사각형 PNG 이미지 필요, 보통 180x180 픽셀) -->
+    <link rel="apple-touch-icon" href="https://static.vecteezy.com/system/resources/thumbnails/005/200/802/small/symbol-pi-icon-black-color-illustration-flat-style-simple-image-vector.jpg">
+
+    <!-- 2. 홈 화면에 추가할 때 기본으로 추천되는 앱 이름 -->
+    <meta name="apple-mobile-web-app-title" content="수업 스케줄">
+
+    <!-- 3. 💡꿀팁: 사파리 주소창을 없애고 진짜 앱처럼 전체화면으로 열리게 하는 코드 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
     <!-- Firebase 실시간 데이터베이스 및 인증 라이브러리 추가 -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
