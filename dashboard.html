@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>대시보드 - Scheduler</title>
+
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
+    
+    <!-- Firebase 라이브러리 -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+    <style>
+        /* 메인 페이지와 동일한 톤앤매너 유지 */
+        body { 
+            font-family: 'Malgun Gothic', sans-serif; 
+            text-align: center; 
+            margin: 10px; 
+            background-color: #f9f9f9;
+            touch-action: manipulation;
+        }
+        h2 { margin-top: 45px; margin-bottom: 20px; font-size: 1.5em; color: #2c3e50; }
+        
+        button { 
+            padding: 10px 15px; margin: 4px; cursor: pointer; border: none; 
+            border-radius: 8px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 0.9em;
+        }
+
+        /* 우측 상단 컨테이너 */
+        #top-right-container {
+            position: absolute; top: 12px; right: 10px;
+            display: flex; flex-direction: column; align-items: flex-end; z-index: 100;
+        }
+        .top-right-row { display: flex; align-items: center; gap: 8px; }
+        #btn-main { background-color: #3498db; color: white; padding: 6px 10px; font-size: 0.75em; }
+        #logout-btn { background-color: #7f8c8d; color: white; padding: 6px 10px; font-size: 0.75em; }
+
+        /* 대시보드 카드 레이아웃 */
+        .dashboard-grid {
+            display: flex; flex-direction: column; gap: 15px;
+            max-width: 800px; margin: 0 auto; padding: 10px;
+        }
+        .card {
+            background-color: white; border: 1px solid #ccc; border-radius: 12px;
+            padding: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); text-align: left;
+        }
+        .card h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px;}
+        .card p { margin: 5px 0; font-size: 0.95em; color: #555; }
+        .date-text { font-weight: bold; color: #2ecc71; }
+
+        /* contenteditable placeholder 꼼수 */
+        #syllabus-editor:empty:before {
+            content: attr(placeholder);
+            color: #aaa;
+            pointer-events: none;
+        }
+
+        /* 로그인 오버레이 */
+        #login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.8); z-index: 9999; display: flex; justify-content: center; align-items: center;
+        }
+        #auth-loading { color: white; font-size: 1.2em; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <!-- 권한 확인 로딩 -->
+    <div id="login-overlay">
+        <div id="auth-loading">⏳ 권한을 확인 중입니다...</div>
+    </div>
+
+    <!-- 우측 상단 헤더 -->
+    <div id="top-right-container" style="display: none;">
+        <div class="top-right-row">
+            <span id="user-name-display" style="color: #7f8c8d; font-size: 0.85em; font-weight: bold;"></span>
+            <button id="btn-main" onclick="location.href='index.html'">메인 캘린더</button>
+            <button id="logout-btn" onclick="logout()">로그아웃</button>
+        </div>
+        <div id="role-badge" style="font-size: 0.8em; font-weight: bold; color: #8E44AD; margin-top: 4px;"></div>
+    </div>
+
+    <h2>📊 수업 대시보드</h2>
+
+    <div class="dashboard-grid">
+        <!-- 1. 예정된 다음 수업 카드 -->
+        <div class="card">
+            <h3>⏰ 예정된 다음 수업</h3>
+            <p id="dash-next-class">데이터를 불러오는 중입니다...</p>
+        </div>
+
+        <!-- 2. 수업 일지 카드 (실제 데이터 연동 테이블) -->
+        <div class="card" style="padding-left: 10px; padding-right: 10px;">
+            <h3 style="margin-left: 10px; margin-right: 10px;">📝 수업 일지 및 피드백</h3>
+            
+            <div style="overflow-x: auto; padding-bottom: 5px;">
+                <table style="width: 100%; border-collapse: collapse; min-width: 500px; text-align: center;">
+                    <thead>
+                        <tr style="background-color: #ecf0f1; color: #2c3e50; font-size: 0.9em;">
+                            <!-- 칸 너비 최소화 적용 -->
+                            <th style="border: 1px solid #ccc; padding: 8px; width: 70px; white-space: nowrap;">일자</th>
+                            <th style="border: 1px solid #ccc; padding: 8px; width: 105px; white-space: nowrap;">시간</th>
+                            <th style="border: 1px solid #ccc; padding: 8px;">수업 개요</th>
+                            <th style="border: 1px solid #ccc; padding: 8px;">비고</th>
+                        </tr>
+                    </thead>
+                    <tbody id="log-table-body">
+                        <tr><td colspan="4" style="padding: 20px;">데이터를 불러오는 중입니다...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div style="margin: 0 10px; min-height: 25px;">
+                <div id="log-save-status" style="text-align: center; margin-top: 8px; font-size: 0.9em; font-weight: bold;"></div>
+            </div>
+        </div>
+
+        <!-- 3. 자유 서식 에디터 카드 -->
+        <div class="card">
+            <h3 style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 2px solid #ecf0f1;">
+                <input type="text" id="syllabus-title" placeholder="제목을 입력하세요 (예: 📘 수업 목차)" onblur="saveSyllabus()" 
+                       style="font-size: 1em; font-weight: bold; color: #34495e; border: none; border-bottom: 1px dashed transparent; outline: none; background: transparent; width: 100%; font-family: inherit; transition: border-color 0.2s;">
+                <span id="syllabus-save-status" style="font-size: 0.7em; font-weight: bold; white-space: nowrap; margin-left: 10px;"></span>
+            </h3>
+            
+            <!-- 내용 입력창 -->
+            <div id="syllabus-editor" contenteditable="false" onblur="saveSyllabus()" placeholder="내용을 입력하세요"
+                 style="text-align: left; font-size: 0.95em; line-height: 1.6; color: #333; min-height: 150px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; outline: none; background: white;">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. 파이어베이스 연결
+        const firebaseConfig = {
+            apiKey: "AIzaSyBWQvoSrlT20FLyIW75GLo38lwo0uKE-_Q",
+            authDomain: "lesson-scheduler-f3d37.firebaseapp.com",
+            databaseURL: "https://lesson-scheduler-f3d37-default-rtdb.firebaseio.com",
+            projectId: "lesson-scheduler-f3d37",
+            storageBucket: "lesson-scheduler-f3d37.firebasestorage.app",
+            messagingSenderId: "1026285811305",
+            appId: "1:1026285811305:web:d85180790ff9b2a13314f8",
+            measurementId: "G-P7Q3R1WK40"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const auth = firebase.auth();
+        
+        let loggedInRole = null; 
+
+        // 2. 권한(Role) 확인 - 학생 접근 차단
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                db.ref('roles/' + user.uid).once('value').then((snapshot) => {
+                    loggedInRole = snapshot.val(); 
+                    
+                    if (loggedInRole === 'tutor' || loggedInRole === 'parent') {
+                        document.getElementById('login-overlay').style.display = 'none';
+                        document.getElementById('top-right-container').style.display = 'flex';
+                        
+                        const displayName = user.email.split('@')[0];
+                        document.getElementById('user-name-display').innerText = `${displayName} 님`;
+                        
+                        const roleName = loggedInRole === 'tutor' ? '선생님 계정' : '학부모 계정';
+                        document.getElementById('role-badge').innerText = roleName;
+                        
+                        // 권한에 따른 에디터 편집/읽기 UI 설정
+                        const syllabusTitle = document.getElementById('syllabus-title');
+                        const syllabusEditor = document.getElementById('syllabus-editor');
+                        
+                        if (loggedInRole === 'tutor') {
+                            syllabusTitle.removeAttribute('readonly');
+                            syllabusTitle.style.borderBottom = '1px dashed #ccc'; // 선생님에게만 수정 가능함을 안내하는 점선 표시
+                            
+                            syllabusEditor.setAttribute('contenteditable', 'true');
+                            syllabusEditor.style.backgroundColor = 'white';
+                            syllabusEditor.style.border = '1px solid #ccc';
+                        } else {
+                            // 학부모는 읽기 전용으로 (테두리, 점선, placeholder 숨김 처리)
+                            syllabusTitle.setAttribute('readonly', 'true');
+                            syllabusTitle.style.borderBottom = 'none';
+                            syllabusTitle.placeholder = '';
+                            
+                            syllabusEditor.setAttribute('contenteditable', 'false');
+                            syllabusEditor.style.backgroundColor = 'transparent';
+                            syllabusEditor.style.border = 'none';
+                            syllabusEditor.style.padding = '0';
+                            syllabusEditor.setAttribute('placeholder', '');
+                        }
+                        
+                        loadDashboardData();
+                    } else {
+                        alert('대시보드는 선생님과 학부모만 접근할 수 있습니다.');
+                        location.href = 'index.html';
+                    }
+                }).catch((error) => {
+                    console.error("권한 데이터 읽기 실패:", error);
+                    alert("데이터베이스 접근 권한이 없습니다. Firebase 규칙을 확인해주세요.");
+                    auth.signOut().then(() => { location.href = 'index.html'; });
+                });
+            } else {
+                location.href = 'index.html';
+            }
+        });
+
+        function logout() {
+            auth.signOut().then(() => { location.href = 'index.html'; });
+        }
+
+        // 3. 대시보드 데이터 실시간 연동 및 렌더링
+        function loadDashboardData() {
+            db.ref('shared_schedule').on('value', (snapshot) => {
+                const data = snapshot.val() || {};
+                const classData = data.classTime || {};
+                const classLogs = data.class_logs || {}; 
+                const syllabusData = data.syllabus || { title: '', content: '' }; // 제목과 내용을 분리하여 가져옴
+
+                let activeCells = [];
+                const now = new Date();
+
+                // === A. 수업 일시 추출 ===
+                for (let cellId in classData) {
+                    let val = classData[cellId] === true ? 1 : classData[cellId];
+                    if (val === 1 || val === 2) {
+                        const parts = cellId.split('-'); 
+                        let year, month, date, time;
+                        if (parts.length === 3) { year = 2026; month = parseInt(parts[0]); date = parseInt(parts[1]); time = parts[2]; }
+                        else { year = parseInt(parts[0]); month = parseInt(parts[1]); date = parseInt(parts[2]); time = parts[3]; }
+
+                        const hr = parseInt(time.split(':')[0]);
+                        const cellDateObj = new Date(year, month - 1, date, hr);
+
+                        activeCells.push({ year, month, date, hr, timestamp: cellDateObj.getTime() });
+                    }
+                }
+
+                // === B. '예정된 다음 수업' 찾기 ===
+                let upcomingClasses = activeCells.filter(cell => cell.timestamp >= now.getTime());
+                upcomingClasses.sort((a, b) => a.timestamp - b.timestamp);
+
+                if (upcomingClasses.length > 0) {
+                    const nextObj = new Date(upcomingClasses[0].timestamp);
+                    const nextStr = `${nextObj.getFullYear()}년 ${nextObj.getMonth() + 1}월 ${nextObj.getDate()}일, ` + 
+                                  `${nextObj.getHours() === 12 ? '정오 12시' : (nextObj.getHours() < 12 ? '오전 ' + nextObj.getHours() + '시' : '오후 ' + (nextObj.getHours() - 12) + '시')}`;
+                    document.getElementById('dash-next-class').innerHTML = `<span class="date-text">${nextStr}</span>에 수업이 예정되어 있습니다.`;
+                } else {
+                    document.getElementById('dash-next-class').innerText = "현재 확정된 향후 일정이 없습니다.";
+                }
+
+                // === C. 수업 일지 렌더링 (병합 로직 및 표 그리기) ===
+                activeCells.sort((a, b) => a.timestamp - b.timestamp); 
+                let groupedClasses = [];
+                let currentGroup = null;
+
+                for (let cell of activeCells) {
+                    if (!currentGroup) {
+                        currentGroup = { ...cell, startHr: cell.hr, endHr: cell.hr + 1 };
+                    } else {
+                        if (currentGroup.year === cell.year && currentGroup.month === cell.month && 
+                            currentGroup.date === cell.date && currentGroup.endHr === cell.hr) {
+                            currentGroup.endHr = cell.hr + 1;
+                        } else {
+                            groupedClasses.push(currentGroup);
+                            currentGroup = { ...cell, startHr: cell.hr, endHr: cell.hr + 1 };
+                        }
+                    }
+                }
+                if (currentGroup) groupedClasses.push(currentGroup);
+
+                // 일지 입력값 백업
+                const activeId = document.activeElement ? document.activeElement.id : null;
+                const activeValue = document.activeElement ? document.activeElement.value : null;
+                let activeSelectionStart = null;
+                let activeSelectionEnd = null;
+                
+                if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') {
+                    activeSelectionStart = document.activeElement.selectionStart;
+                    activeSelectionEnd = document.activeElement.selectionEnd;
+                }
+
+                const tbody = document.getElementById('log-table-body');
+                tbody.innerHTML = '';
+                const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+                if (groupedClasses.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px;">확정된 수업 일정이 없습니다.</td></tr>';
+                }
+
+                const isParent = loggedInRole === 'parent';
+                const readonlyAttr = isParent ? 'readonly' : '';
+
+                for (let gc of groupedClasses) {
+                    const d = new Date(gc.year, gc.month - 1, gc.date);
+                    const dayStr = dayNames[d.getDay()];
+                    
+                    const dateStr = `${gc.month}/${gc.date}(${dayStr})`;
+                    const timeStr = `${String(gc.startHr).padStart(2, '0')}:00 - ${String(gc.endHr).padStart(2, '0')}:00`;
+
+                    const blockId = `${gc.year}-${gc.month}-${gc.date}-${gc.startHr}`;
+                    const logData = classLogs[blockId] || { summary: '', note: '' };
+
+                    const blurEventSummary = isParent ? '' : `onblur="saveSingleLog('${blockId}', 'summary', this.value)"`;
+                    const blurEventNote = isParent ? '' : `onblur="saveSingleLog('${blockId}', 'note', this.value)"`;
+
+                    let tr = document.createElement('tr');
+                    tr.style.borderBottom = "1px solid #eee";
+                    tr.innerHTML = `
+                        <td style="border: 1px solid #ccc; padding: 6px; font-weight: bold; color: #2c3e50; font-size: 0.9em;">${dateStr}</td>
+                        <td style="border: 1px solid #ccc; padding: 6px; font-size: 0.85em; color: #555;">${timeStr}</td>
+                        <td style="border: 1px solid #ccc; padding: 0;">
+                            <textarea id="summary-${blockId}" ${blurEventSummary} ${readonlyAttr} style="width: 100%; height: 100%; border: none; min-height: 50px; padding: 10px; box-sizing: border-box; resize: vertical; font-family: inherit; font-size: 0.9em; outline: none; background: transparent;">${logData.summary || ''}</textarea>
+                        </td>
+                        <td style="border: 1px solid #ccc; padding: 0;">
+                            <textarea id="note-${blockId}" ${blurEventNote} ${readonlyAttr} style="width: 100%; height: 100%; border: none; min-height: 50px; padding: 10px; box-sizing: border-box; resize: vertical; font-family: inherit; font-size: 0.9em; outline: none; background: transparent;">${logData.note || ''}</textarea>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+
+                // 일지 커서 복구
+                if (activeId && activeId.includes('-')) {
+                    const el = document.getElementById(activeId);
+                    if (el) {
+                        el.value = activeValue;
+                        el.focus();
+                        if (activeSelectionStart !== null && activeSelectionEnd !== null) {
+                            el.setSelectionRange(activeSelectionStart, activeSelectionEnd);
+                        } else {
+                            el.setSelectionRange(activeValue.length, activeValue.length);
+                        }
+                    }
+                }
+
+                // === D. 커스텀 에디터 렌더링 (제목 및 내용) ===
+                const syllabusTitle = document.getElementById('syllabus-title');
+                const syllabusEditor = document.getElementById('syllabus-editor');
+                
+                if (document.activeElement !== syllabusTitle) {
+                    syllabusTitle.value = syllabusData.title;
+                }
+                if (document.activeElement !== syllabusEditor) {
+                    syllabusEditor.innerHTML = syllabusData.content;
+                }
+            });
+        }
+
+        // 4. 작성된 일지 Firebase에 개별 자동 저장
+        function saveSingleLog(blockId, fieldName, value) {
+            const statusEl = document.getElementById('log-save-status');
+            statusEl.innerText = "⏳ 자동 저장 중...";
+            statusEl.style.color = "#f39c12";
+
+            db.ref(`shared_schedule/class_logs/${blockId}/${fieldName}`).set(value.trim())
+              .then(() => {
+                  statusEl.innerText = "✔️ 자동 저장 완료";
+                  statusEl.style.color = "#2ecc71";
+                  
+                  setTimeout(() => { 
+                      if (statusEl.innerText.includes("완료")) {
+                          statusEl.innerText = ""; 
+                      }
+                  }, 2000);
+              })
+              .catch((err) => {
+                  console.error(err);
+                  statusEl.innerText = "❌ 저장 실패: 서버 권한을 확인해주세요.";
+                  statusEl.style.color = "#e74c3c";
+              });
+        }
+
+        // 5. 제목 및 본문 (리치 텍스트) 자동 저장
+        function saveSyllabus() {
+            if (loggedInRole !== 'tutor') return;
+            
+            const titleVal = document.getElementById('syllabus-title').value.trim();
+            const htmlContent = document.getElementById('syllabus-editor').innerHTML;
+            
+            const statusEl = document.getElementById('syllabus-save-status');
+            statusEl.innerText = "⏳ 저장 중...";
+            statusEl.style.color = "#f39c12";
+
+            // 제목과 내용을 하나의 객체 묶음(syllabus)으로 DB에 저장
+            db.ref(`shared_schedule/syllabus`).set({
+                title: titleVal,
+                content: htmlContent
+            })
+            .then(() => {
+                statusEl.innerText = "✔️ 저장 완료";
+                statusEl.style.color = "#2ecc71";
+                
+                setTimeout(() => { 
+                    if (statusEl.innerText.includes("완료")) {
+                        statusEl.innerText = ""; 
+                    }
+                }, 2000);
+            })
+            .catch((err) => {
+                console.error(err);
+                statusEl.innerText = "❌ 실패";
+                statusEl.style.color = "#e74c3c";
+            });
+        }
+    </script>
+</body>
+</html>
