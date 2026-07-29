@@ -198,6 +198,12 @@
         .top-right-row {
             display: flex; align-items: center; gap: 8px;
         }
+        
+        /* 대시보드 버튼 스타일 추가 */
+        #btn-dashboard {
+            padding: 6px 10px; font-size: 0.75em; background-color: #3498db; color: white; border:none; border-radius:5px; cursor:pointer; display: none;
+        }
+        
         #logout-btn {
             padding: 6px 10px; font-size: 0.75em; background-color: #7f8c8d; color: white; border:none; border-radius:5px; cursor:pointer;
         }
@@ -240,6 +246,8 @@
     <div id="top-right-container" style="display: none;">
         <div class="top-right-row">
             <span id="user-name-display" style="color: #7f8c8d; font-size: 0.85em; font-weight: bold;"></span>
+            <!-- 1. 대시보드로 넘어가는 버튼 추가 (초기에는 display: none) -->
+            <button id="btn-dashboard" onclick="location.href='dashboard.html'">대시보드</button>
             <button id="logout-btn" onclick="logout()">로그아웃</button>
         </div>
         <div id="unpaid-hours-display">미결제 수업 시수: 0시간</div>
@@ -310,23 +318,25 @@
                 db.ref('roles/' + user.uid).once('value').then((snapshot) => {
                     const role = snapshot.val(); 
                     
-                    if (role === 'tutor' || role === 'student') {
+                    // role에 parent(학부모) 추가
+                    if (role === 'tutor' || role === 'student' || role === 'parent') {
                         loggedInRole = role;
                         document.getElementById('login-overlay').style.display = 'none';
                         
                         // 우측 상단 컨테이너 표시
                         document.getElementById('top-right-container').style.display = 'flex';
                         
-                        // 선생님일 경우 미결제 수업 시수 표시 활성화
-                        if (loggedInRole === 'tutor') {
+                        // 선생님 및 학부모일 경우 미결제 시수 표시 활성화 + 대시보드 버튼 노출
+                        if (loggedInRole === 'tutor' || loggedInRole === 'parent') {
                             document.getElementById('unpaid-hours-display').style.display = 'block';
+                            document.getElementById('btn-dashboard').style.display = 'inline-block'; // 여기서 버튼을 보이게 합니다.
                         }
 
                         // 이메일에서 아이디 추출하여 이름으로 표시 ("홍길동@mail.com" -> "홍길동")
                         const displayName = user.email.split('@')[0];
                         document.getElementById('user-name-display').innerText = `${displayName} 님`;
                         
-                        setMode(loggedInRole); 
+                        setMode(loggedInRole === 'parent' ? 'student' : loggedInRole); 
                         
                         attachDatabaseListener();
                     } else {
@@ -600,10 +610,10 @@
             let msg = "";
             if (mode === 'tutor') {
                 if (loggedInRole === 'tutor') msg = "<b>선생님 일정 입력 (파란색)</b><br><small>불가능한 시간을 체크하세요.</small>";
-                else msg = "<b>선생님 일정 (조회 전용)</b><br><small>학생은 선생님 일정을 수정할 수 없습니다.</small>";
+                else msg = "<b>선생님 일정 (조회 전용)</b><br><small>선생님 일정은 수정할 수 없습니다.</small>";
             }
             else if (mode === 'student') {
-                if (loggedInRole === 'student') msg = "<b>학생 일정 입력 (주황색)</b><br><small>불가능한 시간을 체크하세요.</small>";
+                if (loggedInRole === 'student' || loggedInRole === 'parent') msg = "<b>학생 일정 입력 (주황색)</b><br><small>불가능한 시간을 체크하세요.</small>";
                 else msg = "<b>학생 일정 (조회 전용)</b><br><small>선생님은 학생 일정을 수정할 수 없습니다.</small>";
             }
             document.getElementById('mode-text').innerHTML = msg;
@@ -616,7 +626,8 @@
                 tutorData[cellId] = !tutorData[cellId];
             } 
             else if (currentMode === 'student') {
-                if (loggedInRole !== 'student') { showMessage("권한이 없습니다. (조회만 가능)"); return; }
+                // 학부모(parent)도 학생(student) 일정 조작 가능
+                if (loggedInRole !== 'student' && loggedInRole !== 'parent') { showMessage("권한이 없습니다. (조회만 가능)"); return; }
                 studentData[cellId] = !studentData[cellId];
             } 
             else if (currentMode === 'result') {
@@ -631,8 +642,8 @@
                         else if (currentVal === 1) classData[cellId] = 2;
                         else classData[cellId] = 0;
                     } 
-                    else if (loggedInRole === 'student') {
-                        // 학생: 과거 날짜 수정 불가 체크 로직
+                    else if (loggedInRole === 'student' || loggedInRole === 'parent') {
+                        // 학생 & 학부모: 과거 날짜 수정 불가 체크 로직
                         const cellTimeParts = cellId.split('-');
                         cellTimeParts.pop(); // "00:00" 등 시간 부분 제거
                         const dayId = cellTimeParts.join('-'); // "7-26" 형태의 ID 복원
@@ -649,7 +660,7 @@
                             }
                         }
 
-                        // 학생: 0(수업아님) <-> 1(미결제 수업) 만 전환 (결제완료 상태인 2를 누르면 0으로 해제)
+                        // 학생 & 학부모: 0(수업아님) <-> 1(미결제 수업) 만 전환 (결제완료 상태인 2를 누르면 0으로 해제)
                         if (currentVal === 0) classData[cellId] = 1;
                         else classData[cellId] = 0;
                     }
@@ -715,7 +726,7 @@
                                     cell.classList.add('class-selected');
                                     cell.innerText = '★';
                                 } else {
-                                    // 선생님 계정: 상태값에 따라 결제 여부 시각적으로 분리
+                                    // 선생님 및 학부모 계정: 상태값에 따라 결제 여부 시각적으로 분리
                                     if (currentVal === 1) {
                                         cell.classList.add('class-selected'); // 짙은 초록색 (미결제)
                                     } else if (currentVal === 2) {
@@ -731,13 +742,13 @@
                 }
             }
             
-            // 선생님용 미결제 수업 시수 업데이트 호출
+            // 선생님 및 학부모용 미결제 수업 시수 업데이트 호출
             updateUnpaidHours();
         }
 
         // 전체 데이터에서 미결제 수업(상태값 1)의 개수를 합산하는 함수
         function updateUnpaidHours() {
-            if (loggedInRole !== 'tutor') return;
+            if (loggedInRole !== 'tutor' && loggedInRole !== 'parent') return;
             
             let unpaidCount = 0;
             for (let key in classData) {
@@ -755,6 +766,8 @@
             currentMode = 'result';
             if (loggedInRole === 'tutor') {
                 document.getElementById('mode-text').innerHTML = "<b>매칭 결과 및 대금 관리</b><br><small>한 번 터치: 미결제(초록) / 두 번 터치: 결제완료(노랑)</small>";
+            } else if (loggedInRole === 'parent') {
+                document.getElementById('mode-text').innerHTML = "<b>매칭 결과 및 수업 확정</b><br><small>초록색 칸을 터치하여 최종 수업 일시를 확정하세요.</small>";
             } else {
                 document.getElementById('mode-text').innerHTML = "<b>매칭 결과 및 수업 확정</b><br><small>초록색 칸을 터치하여 최종 수업 일시를 확정하세요.</small>";
             }
@@ -936,7 +949,7 @@
             icsContent += "END:VCALENDAR\r\n";
 
             if (eventCount === 0) {
-                alert("현재 시점 이후로 확정된 수업 일정이 없습니다.");
+                alert("현재 시점 이후로 확정된(★) 수업 일정이 없습니다.");
                 return;
             }
             
