@@ -99,7 +99,6 @@
                 <table style="width: 100%; border-collapse: collapse; min-width: 500px; text-align: center;">
                     <thead>
                         <tr style="background-color: #ecf0f1; color: #2c3e50; font-size: 0.9em;">
-                            <!-- 칸 너비 최소화 적용 -->
                             <th style="border: 1px solid #ccc; padding: 8px; width: 70px; white-space: nowrap;">일자</th>
                             <th style="border: 1px solid #ccc; padding: 8px; width: 105px; white-space: nowrap;">시간</th>
                             <th style="border: 1px solid #ccc; padding: 8px;">수업 개요</th>
@@ -150,20 +149,22 @@
         
         let loggedInRole = null; 
 
-        // 2. 권한(Role) 확인 - 학생 접근 차단
+        // 2. 권한(Role) 확인 - 선생님, 학부모, 학생 모두 접근 가능
         auth.onAuthStateChanged((user) => {
             if (user) {
                 db.ref('roles/' + user.uid).once('value').then((snapshot) => {
                     loggedInRole = snapshot.val(); 
                     
-                    if (loggedInRole === 'tutor' || loggedInRole === 'parent') {
+                    if (loggedInRole === 'tutor' || loggedInRole === 'parent' || loggedInRole === 'student') {
                         document.getElementById('login-overlay').style.display = 'none';
                         document.getElementById('top-right-container').style.display = 'flex';
                         
                         const displayName = user.email.split('@')[0];
                         document.getElementById('user-name-display').innerText = `${displayName} 님`;
                         
-                        const roleName = loggedInRole === 'tutor' ? '선생님 계정' : '학부모 계정';
+                        let roleName = '학생 계정';
+                        if (loggedInRole === 'tutor') roleName = '선생님 계정';
+                        else if (loggedInRole === 'parent') roleName = '학부모 계정';
                         document.getElementById('role-badge').innerText = roleName;
                         
                         // 권한에 따른 에디터 편집/읽기 UI 설정
@@ -172,13 +173,13 @@
                         
                         if (loggedInRole === 'tutor') {
                             syllabusTitle.removeAttribute('readonly');
-                            syllabusTitle.style.borderBottom = '1px dashed #ccc'; // 선생님에게만 수정 가능함을 안내하는 점선 표시
+                            syllabusTitle.style.borderBottom = '1px dashed #ccc'; 
                             
                             syllabusEditor.setAttribute('contenteditable', 'true');
                             syllabusEditor.style.backgroundColor = 'white';
                             syllabusEditor.style.border = '1px solid #ccc';
                         } else {
-                            // 학부모는 읽기 전용으로 (테두리, 점선, placeholder 숨김 처리)
+                            // 학부모, 학생은 읽기 전용
                             syllabusTitle.setAttribute('readonly', 'true');
                             syllabusTitle.style.borderBottom = 'none';
                             syllabusTitle.placeholder = '';
@@ -192,7 +193,7 @@
                         
                         loadDashboardData();
                     } else {
-                        alert('대시보드는 선생님과 학부모만 접근할 수 있습니다.');
+                        alert('대시보드에 접근할 권한이 없습니다.');
                         location.href = 'index.html';
                     }
                 }).catch((error) => {
@@ -215,7 +216,7 @@
                 const data = snapshot.val() || {};
                 const classData = data.classTime || {};
                 const classLogs = data.class_logs || {}; 
-                const syllabusData = data.syllabus || { title: '', content: '' }; // 제목과 내용을 분리하여 가져옴
+                const syllabusData = data.syllabus || { title: '', content: '' }; 
 
                 let activeCells = [];
                 const now = new Date();
@@ -288,8 +289,8 @@
                     tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px;">확정된 수업 일정이 없습니다.</td></tr>';
                 }
 
-                const isParent = loggedInRole === 'parent';
-                const readonlyAttr = isParent ? 'readonly' : '';
+                const isReadOnly = loggedInRole !== 'tutor'; // 선생님 제외 모두 읽기 전용
+                const readonlyAttr = isReadOnly ? 'readonly' : '';
 
                 for (let gc of groupedClasses) {
                     const d = new Date(gc.year, gc.month - 1, gc.date);
@@ -301,8 +302,8 @@
                     const blockId = `${gc.year}-${gc.month}-${gc.date}-${gc.startHr}`;
                     const logData = classLogs[blockId] || { summary: '', note: '' };
 
-                    const blurEventSummary = isParent ? '' : `onblur="saveSingleLog('${blockId}', 'summary', this.value)"`;
-                    const blurEventNote = isParent ? '' : `onblur="saveSingleLog('${blockId}', 'note', this.value)"`;
+                    const blurEventSummary = isReadOnly ? '' : `onblur="saveSingleLog('${blockId}', 'summary', this.value)"`;
+                    const blurEventNote = isReadOnly ? '' : `onblur="saveSingleLog('${blockId}', 'note', this.value)"`;
 
                     let tr = document.createElement('tr');
                     tr.style.borderBottom = "1px solid #eee";
