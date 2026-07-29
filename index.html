@@ -6,17 +6,13 @@
     <title>Scheduler</title>
 
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗓️</text></svg>">
-    <!-- 1. 아이폰 홈 화면용 아이콘 (정사각형 PNG 이미지 필요, 보통 180x180 픽셀) -->
     <link rel="apple-touch-icon" href="https://static.vecteezy.com/system/resources/thumbnails/005/200/802/small/symbol-pi-icon-black-color-illustration-flat-style-simple-image-vector.jpg">
 
-    <!-- 2. 홈 화면에 추가할 때 기본으로 추천되는 앱 이름 -->
     <meta name="apple-mobile-web-app-title" content="수업 스케줄">
 
-    <!-- 3. 💡꿀팁: 사파리 주소창을 없애고 진짜 앱처럼 전체화면으로 열리게 하는 코드 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
-    <!-- Firebase 실시간 데이터베이스 및 인증 라이브러리 추가 -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -111,10 +107,10 @@
             border-top: none; 
             border-bottom: none; 
             border-left: none;
-            vertical-align: top; /* 텍스트를 칸의 맨 위로 올림 */
-            text-align: right;   /* 표에 가깝게 우측 정렬 */
+            vertical-align: top; 
+            text-align: right;   
             padding-top: 0;
-            padding-right: 5px;  /* 선과의 여백 */
+            padding-right: 5px;  
             font-weight: normal; 
         }
         
@@ -123,7 +119,7 @@
             position: relative;
             top: -9px; 
             font-size: 0.8em;
-            color: #777; /* 너무 튀지 않는 차분한 색상 */
+            color: #777; 
         }
 
         .sat { color: blue; }
@@ -138,7 +134,7 @@
         .match-free { background-color: #caffbf !important; font-weight: bold; }
         
         .class-selected { background-color: #2ecc71 !important; color: #fff !important; font-weight: bold; }
-        .class-paid { background-color: #d4ac0d !important; color: #fff !important; font-weight: bold; } /* 짙은 노란색 결제완료 */
+        .class-paid { background-color: #d4ac0d !important; color: #fff !important; font-weight: bold; } 
         
         /* 상대방 일정 미리보기 색상 */
         .other-bg { background-color: #f2f2f2 !important; color: #aaa !important; font-size: 0.7em; }
@@ -150,14 +146,14 @@
 
         /* 토글 스위치 UI 스타일 추가 및 좌측 상단 배치 */
         .toggle-container {
-            position: absolute; top: 15px; left: 10px; /* 좌측 최상단으로 이동 */
+            position: absolute; top: 15px; left: 10px; 
             display: flex; justify-content: center; align-items: center; z-index: 100;
         }
         .toggle-label { font-size: 0.85em; font-weight: bold; color: #ccc; transition: color 0.3s; margin: 0 6px; cursor: pointer; }
         .toggle-label.active { color: #333; }
         
         .switch {
-            position: relative; display: inline-block; width: 44px; height: 24px; /* 모바일에 맞게 크기 축소 */
+            position: relative; display: inline-block; width: 44px; height: 24px; 
         }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider {
@@ -199,7 +195,7 @@
             display: flex; align-items: center; gap: 8px;
         }
         
-        /* 대시보드 버튼 스타일 추가 */
+        /* 대시보드 버튼 스타일 */
         #btn-dashboard {
             padding: 6px 10px; font-size: 0.75em; background-color: #3498db; color: white; border:none; border-radius:5px; cursor:pointer; display: none;
         }
@@ -214,25 +210,23 @@
 </head>
 <body>
 
-    <!-- Firebase 이메일 로그인 오버레이 -->
     <div id="login-overlay">
-        <!-- 1. 자동 로그인 대기 중일 때 보여줄 로딩 화면 -->
         <div id="auth-loading" style="color: white; font-size: 1.2em; font-weight: bold;">
             ⏳ 사용자 정보를 확인 중입니다...
         </div>
 
-        <!-- 2. 로그인이 안 되어 있을 때만 나타나는 진짜 로그인 박스 -->
         <div class="login-box" id="login-box" style="display: none;">
             <h2 style="margin-top: 0;">로그인</h2>
             <p style="font-size: 0.9em; color: #666;">계정 정보를 입력하세요.</p>
             <input type="text" id="email-input" placeholder="아이디">
-            <input type="password" id="password-input" placeholder="비밀번호">
+            <input type="password" id="password-input" placeholder="비밀번호" onkeyup="checkLoginInput(event)" onmousedown="checkCapsLock(event)">
+            <p id="caps-lock-warning" style="color: #e74c3c; font-size: 0.8em; margin: -4px 0 10px 0; display: none; font-weight: bold;">⚠️ Caps Lock이 켜져 있습니다.</p>
+            
             <button class="login-btn" onclick="attemptLogin()">로그인</button>
             <p id="login-error" style="color: red; font-size: 0.85em; display: none;">정보를 확인 중입니다...</p>
         </div>
     </div>
 
-    <!-- 뷰 전환 토글 스위치 (좌측 최상단) -->
     <div class="toggle-container">
         <span class="toggle-label active" id="label-week" onclick="setToggleMode(false)">🗓️ 주별</span>
         <label class="switch">
@@ -242,11 +236,9 @@
         <span class="toggle-label" id="label-month" onclick="setToggleMode(true)">📅 월별</span>
     </div>
 
-    <!-- 우측 최상단 로그아웃 및 이름 표시 -->
     <div id="top-right-container" style="display: none;">
         <div class="top-right-row">
             <span id="user-name-display" style="color: #7f8c8d; font-size: 0.85em; font-weight: bold;"></span>
-            <!-- 1. 대시보드로 넘어가는 버튼 추가 (초기에는 display: none) -->
             <button id="btn-dashboard" onclick="location.href='dashboard.html'">대시보드</button>
             <button id="logout-btn" onclick="logout()">로그아웃</button>
         </div>
@@ -265,10 +257,8 @@
         <button id="btn-result" onclick="showResult()">매칭 결과</button>
         <br>
         
-        <!-- 고급 설정 토글 버튼 -->
         <button id="btn-toggle-advanced" onclick="toggleAdvancedSettings()" style="background-color: #95a5a6; color: white; margin-top: 8px;">⚙️ 고급 설정 열기</button>
         
-        <!-- 숨겨진 고급 설정 영역 -->
         <div id="advanced-settings" style="display: none; margin-top: 10px; padding: 10px; background-color: #eaecee; border-radius: 8px;">
             <button id="btn-save" onclick="saveData()">💾 일정 백업</button>
             <button id="btn-load" onclick="document.getElementById('file-input').click()">📂 파일 열기</button>
@@ -288,7 +278,7 @@
 
     <script>
         // ==========================================
-        // 1. 파이어베이스 연결 설정 (선생님의 열쇠)
+        // 1. 파이어베이스 연결 설정 
         // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyBWQvoSrlT20FLyIW75GLo38lwo0uKE-_Q",
@@ -307,42 +297,230 @@
         const scheduleRef = db.ref('shared_schedule'); 
 
         // ==========================================
-        // 2. 로그인 및 역할 인증 (서버 DB 확인)
+        // 2. 달력 데이터 및 전역 변수 우선 초기화 (에러 방지)
         // ==========================================
         let loggedInRole = null; 
         let dbListener = null; 
         let isDataLoaded = false; 
 
+        let currentMode = 'tutor'; 
+        let currentViewMode = 'week'; 
+        let tutorData = {};
+        let studentData = {};
+        let classData = {};
+        let isDragging = false;
+
+        const times = [];
+        for (let i = 0; i < 24; i++) times.push(`${i.toString().padStart(2, '0')}:00`);
+
+        const startDate = new Date(2026, 6, 26);
+        const endDate = new Date(2026, 8, 30);
+        
+        const daysArr = [];
+        const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+        const weeks = [];
+        const monthsData = [];
+        let tempWeek = [];
+        let tempMonthDays = [];
+        let currentMonthLabel = "";
+
+        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+            const year = d.getFullYear();
+            const month = d.getMonth() + 1;
+            const date = d.getDate();
+            const dayNum = d.getDay();
+            let dayClass = dayNum === 0 ? 'sun' : (dayNum === 6 ? 'sat' : '');
+            
+            const id = `${month}-${date}`;
+            const monthStr = `${year}년 ${month}월`;
+            
+            const dayObj = { 
+                label: `${month}/${date}<br><span class="${dayClass}">(${dayNames[dayNum]})</span>`, 
+                id: id, dayNum: dayNum, year: year, month: month, date: date
+            };
+
+            daysArr.push(dayObj);
+
+            tempWeek.push(dayObj);
+            if (dayNum === 6 || d.getTime() === endDate.getTime()) {
+                weeks.push(tempWeek);
+                tempWeek = [];
+            }
+
+            if (currentMonthLabel !== monthStr) {
+                if (tempMonthDays.length > 0) monthsData.push({ label: currentMonthLabel, days: tempMonthDays });
+                tempMonthDays = [];
+                currentMonthLabel = monthStr;
+            }
+            tempMonthDays.push(dayObj);
+        }
+        if (tempMonthDays.length > 0) monthsData.push({ label: currentMonthLabel, days: tempMonthDays });
+
+        for (let day of daysArr) {
+            for (let time of times) {
+                const cellId = `${day.id}-${time}`;
+                tutorData[cellId] = false;
+                studentData[cellId] = false;
+                classData[cellId] = false;
+            }
+        }
+
+        const weekSelector = document.getElementById('week-selector');
+        for (let i = 0; i < weeks.length; i++) {
+            const firstDay = weeks[i][0];
+            const lastDay = weeks[i][weeks[i].length - 1];
+            weekSelector.innerHTML += `<option value="${i}">${i + 1}주차 (${firstDay.id.replace('-', '/')} ~ ${lastDay.id.replace('-', '/')})</option>`;
+        }
+
+        const monthSelector = document.getElementById('month-selector');
+        for (let i = 0; i < monthsData.length; i++) {
+            monthSelector.innerHTML += `<option value="${i}">${monthsData[i].label}</option>`;
+        }
+
+        let currentWeekIndex = 0;
+        let currentMonthIndex = 0;
+        const today = new Date();
+        
+        for (let i = 0; i < weeks.length; i++) {
+            if (weeks[i].some(d => d.year === today.getFullYear() && d.month === (today.getMonth() + 1) && d.date === today.getDate())) {
+                currentWeekIndex = i; break;
+            }
+        }
+        
+        const todayMonthStr = `${today.getFullYear()}년 ${today.getMonth() + 1}월`;
+        for (let i = 0; i < monthsData.length; i++) {
+            if (monthsData[i].label === todayMonthStr) {
+                currentMonthIndex = i; break;
+            }
+        }
+
+        if (weekSelector.options.length > 0) weekSelector.value = currentWeekIndex;
+        if (monthSelector.options.length > 0) monthSelector.value = currentMonthIndex;
+
+        // ==========================================
+        // 3. UI 렌더링 함수 모음
+        // ==========================================
+        function scrollToBottom() {
+            const container = document.getElementById('scroll-container');
+            if(container) { container.scrollTop = container.scrollHeight; }
+        }
+
+        function handleToggleChange() {
+            const isMonth = document.getElementById('view-toggle-checkbox').checked;
+            if (isMonth) {
+                toggleView('month');
+                document.getElementById('label-week').classList.remove('active');
+                document.getElementById('label-month').classList.add('active');
+            } else {
+                toggleView('week');
+                document.getElementById('label-week').classList.add('active');
+                document.getElementById('label-month').classList.remove('active');
+            }
+        }
+
+        function setToggleMode(isMonth) {
+            document.getElementById('view-toggle-checkbox').checked = isMonth;
+            handleToggleChange();
+        }
+
+        function toggleView(mode) {
+            currentViewMode = mode;
+            if (mode === 'week') {
+                document.getElementById('week-selector').style.display = 'inline-block';
+                document.getElementById('month-selector').style.display = 'none';
+            } else {
+                document.getElementById('week-selector').style.display = 'none';
+                document.getElementById('month-selector').style.display = 'inline-block';
+            }
+            buildTable();
+        }
+
+        function buildTable() {
+            const table = document.getElementById('schedule-table');
+            table.innerHTML = ''; 
+            
+            if (currentViewMode === 'week') { table.className = 'view-week'; } 
+            else { table.className = 'view-month'; }
+            
+            const daysToRender = currentViewMode === 'week' ? weeks[currentWeekIndex] : monthsData[currentMonthIndex].days;
+            
+            let headerRow = '<tr><th>시간</th>';
+            for (let day of daysToRender) {
+                const isToday = (day.year === today.getFullYear() && day.month === (today.getMonth() + 1) && day.date === today.getDate());
+                const todayClass = isToday ? 'today-col' : '';
+                headerRow += `<th class="${todayClass}">${day.label}</th>`;
+            }
+            headerRow += '</tr>';
+            table.innerHTML += headerRow;
+
+            for (let time of times) {
+                let formattedTime = time;
+                const hr = parseInt(time.split(':')[0]);
+                if (hr === 0) formattedTime = "자정";
+                else if (hr === 12) formattedTime = "정오";
+                else if (hr < 12) formattedTime = `오전 ${hr}시`;
+                else formattedTime = `오후 ${hr - 12}시`;
+
+                let row = `<tr><td><span class="time-label">${formattedTime}</span></td>`;
+                for (let day of daysToRender) {
+                    const cellId = `${day.id}-${time}`;
+                    row += `<td class="cell" id="${cellId}" 
+                                onmousedown="startDrag('${cellId}')" 
+                                onmouseenter="dragEnter('${cellId}')"></td>`;
+                }
+                row += '</tr>';
+                table.innerHTML += row;
+            }
+            renderTable();
+            setTimeout(scrollToBottom, 50); 
+        }
+
+        function changeWeek() {
+            currentWeekIndex = parseInt(document.getElementById('week-selector').value);
+            buildTable();
+        }
+
+        function changeMonth() {
+            currentMonthIndex = parseInt(document.getElementById('month-selector').value);
+            buildTable();
+        }
+
+        buildTable(); 
+
+        // ==========================================
+        // 4. 로그인 및 인증
+        // ==========================================
         auth.onAuthStateChanged((user) => {
             if (user) {
                 db.ref('roles/' + user.uid).once('value').then((snapshot) => {
                     const role = snapshot.val(); 
                     
-                    // role에 parent(학부모) 추가
                     if (role === 'tutor' || role === 'student' || role === 'parent') {
                         loggedInRole = role;
                         document.getElementById('login-overlay').style.display = 'none';
-                        
-                        // 우측 상단 컨테이너 표시
                         document.getElementById('top-right-container').style.display = 'flex';
                         
-                        // 선생님 및 학부모일 경우 미결제 시수 표시 활성화 + 대시보드 버튼 노출
+                        // 모든 계정(학생 포함)에서 대시보드 버튼 노출
+                        document.getElementById('btn-dashboard').style.display = 'inline-block'; 
+                        
                         if (loggedInRole === 'tutor' || loggedInRole === 'parent') {
                             document.getElementById('unpaid-hours-display').style.display = 'block';
-                            document.getElementById('btn-dashboard').style.display = 'inline-block'; // 여기서 버튼을 보이게 합니다.
                         }
 
-                        // 이메일에서 아이디 추출하여 이름으로 표시 ("홍길동@mail.com" -> "홍길동")
                         const displayName = user.email.split('@')[0];
                         document.getElementById('user-name-display').innerText = `${displayName} 님`;
                         
                         setMode(loggedInRole === 'parent' ? 'student' : loggedInRole); 
-                        
                         attachDatabaseListener();
                     } else {
                         showLoginBox("서버에 권한이 등록되지 않은 사용자입니다.");
                         auth.signOut();
                     }
+                }).catch((error) => {
+                    console.error("권한 데이터 읽기 실패:", error);
+                    showLoginBox("데이터베이스 읽기 권한이 없습니다. 보안 규칙을 확인해주세요.");
+                    auth.signOut();
                 });
             } else {
                 showLoginBox();
@@ -362,10 +540,23 @@
             }
         }
 
+        function checkCapsLock(event) {
+            const capsWarning = document.getElementById('caps-lock-warning');
+            if (event.getModifierState && event.getModifierState('CapsLock')) {
+                capsWarning.style.display = 'block';
+            } else {
+                capsWarning.style.display = 'none';
+            }
+        }
+
+        function checkLoginInput(event) {
+            checkCapsLock(event);
+            if (event.key === 'Enter') { attemptLogin(); }
+        }
+
         function attemptLogin() {
             let idValue = document.getElementById('email-input').value.trim();
             const email = idValue.includes('@') ? idValue : idValue + "@mail.com";
-            
             const password = document.getElementById('password-input').value;
             const errorMsg = document.getElementById('login-error');
             
@@ -386,214 +577,7 @@
         }
 
         // ==========================================
-        // 3. 달력 데이터 및 UI 초기화 (주별/월별 통합)
-        // ==========================================
-        let currentMode = 'tutor'; 
-        let currentViewMode = 'week'; // 'week' 또는 'month'
-        let tutorData = {};
-        let studentData = {};
-        let classData = {};
-        let isDragging = false;
-
-        const times = [];
-        for (let i = 0; i < 24; i++) times.push(`${i.toString().padStart(2, '0')}:00`);
-
-        // 기존 인덱스와의 데이터 호환을 위해 동일한 기간으로 설정
-        const startDate = new Date(2026, 6, 26);
-        const endDate = new Date(2026, 8, 30);
-        
-        const daysArr = [];
-        const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-
-        const weeks = [];
-        const monthsData = [];
-        let tempWeek = [];
-        let tempMonthDays = [];
-        let currentMonthLabel = "";
-
-        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-            const year = d.getFullYear();
-            const month = d.getMonth() + 1;
-            const date = d.getDate();
-            const dayNum = d.getDay();
-            let dayClass = dayNum === 0 ? 'sun' : (dayNum === 6 ? 'sat' : '');
-            
-            // 기존 index.html에 맞춘 DB 연동 ID 형식 유지
-            const id = `${month}-${date}`;
-            const monthStr = `${year}년 ${month}월`;
-            
-            const dayObj = { 
-                label: `${month}/${date}<br><span class="${dayClass}">(${dayNames[dayNum]})</span>`, 
-                id: id, dayNum: dayNum, year: year, month: month, date: date
-            };
-
-            daysArr.push(dayObj);
-
-            // 1. 주별 배열(weeks) 구성
-            tempWeek.push(dayObj);
-            if (dayNum === 6 || d.getTime() === endDate.getTime()) {
-                weeks.push(tempWeek);
-                tempWeek = [];
-            }
-
-            // 2. 월별 배열(monthsData) 구성
-            if (currentMonthLabel !== monthStr) {
-                if (tempMonthDays.length > 0) monthsData.push({ label: currentMonthLabel, days: tempMonthDays });
-                tempMonthDays = [];
-                currentMonthLabel = monthStr;
-            }
-            tempMonthDays.push(dayObj);
-        }
-        if (tempMonthDays.length > 0) monthsData.push({ label: currentMonthLabel, days: tempMonthDays });
-
-        // 데이터 초기화
-        for (let day of daysArr) {
-            for (let time of times) {
-                const cellId = `${day.id}-${time}`;
-                tutorData[cellId] = false;
-                studentData[cellId] = false;
-                classData[cellId] = false;
-            }
-        }
-
-        // 주차 Select 박스 렌더링
-        const weekSelector = document.getElementById('week-selector');
-        for (let i = 0; i < weeks.length; i++) {
-            const firstDay = weeks[i][0];
-            const lastDay = weeks[i][weeks[i].length - 1];
-            weekSelector.innerHTML += `<option value="${i}">${i + 1}주차 (${firstDay.id.replace('-', '/')} ~ ${lastDay.id.replace('-', '/')})</option>`;
-        }
-
-        // 월별 Select 박스 렌더링
-        const monthSelector = document.getElementById('month-selector');
-        for (let i = 0; i < monthsData.length; i++) {
-            monthSelector.innerHTML += `<option value="${i}">${monthsData[i].label}</option>`;
-        }
-
-        let currentWeekIndex = 0;
-        let currentMonthIndex = 0;
-        const today = new Date();
-        
-        // 오늘 날짜가 속한 주차 및 월을 기본값으로 설정
-        for (let i = 0; i < weeks.length; i++) {
-            if (weeks[i].some(d => d.year === today.getFullYear() && d.month === (today.getMonth() + 1) && d.date === today.getDate())) {
-                currentWeekIndex = i;
-                break;
-            }
-        }
-        
-        const todayMonthStr = `${today.getFullYear()}년 ${today.getMonth() + 1}월`;
-        for (let i = 0; i < monthsData.length; i++) {
-            if (monthsData[i].label === todayMonthStr) {
-                currentMonthIndex = i; break;
-            }
-        }
-
-        if (weekSelector.options.length > 0) weekSelector.value = currentWeekIndex;
-        if (monthSelector.options.length > 0) monthSelector.value = currentMonthIndex;
-
-        // 스크롤 맨 아래로 내리는 함수
-        function scrollToBottom() {
-            const container = document.getElementById('scroll-container');
-            if(container) {
-                container.scrollTop = container.scrollHeight;
-            }
-        }
-
-        // 토글 스위치 변경 핸들러
-        function handleToggleChange() {
-            const isMonth = document.getElementById('view-toggle-checkbox').checked;
-            if (isMonth) {
-                toggleView('month');
-                document.getElementById('label-week').classList.remove('active');
-                document.getElementById('label-month').classList.add('active');
-            } else {
-                toggleView('week');
-                document.getElementById('label-week').classList.add('active');
-                document.getElementById('label-month').classList.remove('active');
-            }
-        }
-
-        // 글자('주별 보기', '월별 보기')를 클릭했을 때도 스위치가 넘어가도록 연결
-        function setToggleMode(isMonth) {
-            document.getElementById('view-toggle-checkbox').checked = isMonth;
-            handleToggleChange();
-        }
-
-        // 뷰 토글 함수
-        function toggleView(mode) {
-            currentViewMode = mode;
-            if (mode === 'week') {
-                document.getElementById('week-selector').style.display = 'inline-block';
-                document.getElementById('month-selector').style.display = 'none';
-            } else {
-                document.getElementById('week-selector').style.display = 'none';
-                document.getElementById('month-selector').style.display = 'inline-block';
-            }
-            buildTable();
-        }
-
-        function buildTable() {
-            const table = document.getElementById('schedule-table');
-            table.innerHTML = ''; 
-            
-            // 현재 뷰 모드에 따라 테이블에 알맞은 CSS 클래스 씌워주기
-            if (currentViewMode === 'week') {
-                table.className = 'view-week';
-            } else {
-                table.className = 'view-month';
-            }
-            
-            const daysToRender = currentViewMode === 'week' ? weeks[currentWeekIndex] : monthsData[currentMonthIndex].days;
-            
-            let headerRow = '<tr><th>시간</th>';
-            for (let day of daysToRender) {
-                const isToday = (day.year === today.getFullYear() && day.month === (today.getMonth() + 1) && day.date === today.getDate());
-                const todayClass = isToday ? 'today-col' : '';
-                headerRow += `<th class="${todayClass}">${day.label}</th>`;
-            }
-            headerRow += '</tr>';
-            table.innerHTML += headerRow;
-
-            for (let time of times) {
-                // 24시간제를 12시간제(오전/오후/자정/정오)로 변환
-                let formattedTime = time;
-                const hr = parseInt(time.split(':')[0]);
-                if (hr === 0) formattedTime = "자정";
-                else if (hr === 12) formattedTime = "정오";
-                else if (hr < 12) formattedTime = `오전 ${hr}시`;
-                else formattedTime = `오후 ${hr - 12}시`;
-
-                let row = `<tr><td><span class="time-label">${formattedTime}</span></td>`;
-                for (let day of daysToRender) {
-                    const cellId = `${day.id}-${time}`;
-                    row += `<td class="cell" id="${cellId}" 
-                                onmousedown="startDrag('${cellId}')" 
-                                onmouseenter="dragEnter('${cellId}')"></td>`;
-                }
-                row += '</tr>';
-                table.innerHTML += row;
-            }
-            renderTable();
-            
-            // 테이블을 새로 그릴 때마다 스크롤을 맨 아래로 내림
-            setTimeout(scrollToBottom, 50); 
-        }
-
-        function changeWeek() {
-            currentWeekIndex = parseInt(document.getElementById('week-selector').value);
-            buildTable();
-        }
-
-        function changeMonth() {
-            currentMonthIndex = parseInt(document.getElementById('month-selector').value);
-            buildTable();
-        }
-
-        buildTable(); 
-
-        // ==========================================
-        // 4. 상호작용 및 UI 업데이트 로직
+        // 5. 달력 상호작용 및 서버 동기화
         // ==========================================
         document.body.addEventListener('mouseup', stopDrag);
         document.body.addEventListener('touchend', stopDrag);
@@ -626,33 +610,29 @@
                 tutorData[cellId] = !tutorData[cellId];
             } 
             else if (currentMode === 'student') {
-                // 학부모(parent)도 학생(student) 일정 조작 가능
                 if (loggedInRole !== 'student' && loggedInRole !== 'parent') { showMessage("권한이 없습니다. (조회만 가능)"); return; }
                 studentData[cellId] = !studentData[cellId];
             } 
             else if (currentMode === 'result') {
                 if (!tutorData[cellId] && !studentData[cellId]) {
                     
-                    // 호환성을 위해 기존의 true는 1(미결제 수업)로 간주
                     let currentVal = classData[cellId] === true ? 1 : (classData[cellId] || 0);
 
                     if (loggedInRole === 'tutor') {
-                        // 선생님: 0(수업아님) -> 1(미결제) -> 2(결제완료) -> 0 순환
                         if (currentVal === 0) classData[cellId] = 1;
                         else if (currentVal === 1) classData[cellId] = 2;
                         else classData[cellId] = 0;
                     } 
                     else if (loggedInRole === 'student' || loggedInRole === 'parent') {
-                        // 학생 & 학부모: 과거 날짜 수정 불가 체크 로직
                         const cellTimeParts = cellId.split('-');
-                        cellTimeParts.pop(); // "00:00" 등 시간 부분 제거
-                        const dayId = cellTimeParts.join('-'); // "7-26" 형태의 ID 복원
+                        cellTimeParts.pop(); 
+                        const dayId = cellTimeParts.join('-'); 
                         
                         const dayData = daysArr.find(d => d.id === dayId);
                         if (dayData) {
                             const now = new Date();
                             const cellDateObj = new Date(dayData.year, dayData.month - 1, dayData.date);
-                            const todayDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // 오늘 0시 0분
+                            const todayDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate()); 
                             
                             if (cellDateObj < todayDateObj) {
                                 showMessage("이미 지난 날짜의 수업 여부는 수정할 수 없습니다.");
@@ -660,7 +640,6 @@
                             }
                         }
 
-                        // 학생 & 학부모: 0(수업아님) <-> 1(미결제 수업) 만 전환 (결제완료 상태인 2를 누르면 0으로 해제)
                         if (currentVal === 0) classData[cellId] = 1;
                         else classData[cellId] = 0;
                     }
@@ -670,11 +649,7 @@
         }
 
         function startDrag(cellId) {
-            if (!isDataLoaded) {
-                showMessage("⏳ 서버 동기화 중입니다. 잠시만 기다려주세요.");
-                return;
-            }
-            
+            if (!isDataLoaded) { showMessage("⏳ 서버 동기화 중입니다. 잠시만 기다려주세요."); return; }
             isDragging = true;
             toggleCell(cellId);
         }
@@ -686,7 +661,7 @@
         function stopDrag() {
             if (isDragging) {
                 isDragging = false;
-                saveToServer(); // 드래그 완료 시 부분 업데이트
+                saveToServer(); 
             }
         }
 
@@ -695,25 +670,21 @@
                 for (let time of times) {
                     const cellId = `${day.id}-${time}`;
                     const cell = document.getElementById(cellId);
-                    if (!cell) continue; // 화면에 렌더링되지 않은 칸은 패스
+                    if (!cell) continue; 
                     
                     cell.className = 'cell';
                     cell.innerHTML = '';
-                    cell.style.backgroundColor = ''; // 스타일 초기화
+                    cell.style.backgroundColor = ''; 
 
                     if (currentMode === 'tutor') {
-                        if (tutorData[cellId]) {
-                            cell.classList.add('tutor-busy');
-                        } else if (studentData[cellId]) {
-                            cell.classList.add('other-bg');
-                            cell.innerHTML = '학생 OFF';
+                        if (tutorData[cellId]) { cell.classList.add('tutor-busy'); } 
+                        else if (studentData[cellId]) {
+                            cell.classList.add('other-bg'); cell.innerHTML = '학생 OFF';
                         }
                     } else if (currentMode === 'student') {
-                        if (studentData[cellId]) {
-                            cell.classList.add('student-busy');
-                        } else if (tutorData[cellId]) {
-                            cell.classList.add('other-bg');
-                            cell.innerHTML = '선생님 OFF';
+                        if (studentData[cellId]) { cell.classList.add('student-busy'); } 
+                        else if (tutorData[cellId]) {
+                            cell.classList.add('other-bg'); cell.innerHTML = '선생님 OFF';
                         }
                     } else if (currentMode === 'result') {
                         if (!tutorData[cellId] && !studentData[cellId]) {
@@ -722,16 +693,11 @@
 
                             if (currentVal === 1 || currentVal === 2) {
                                 if (loggedInRole === 'student') {
-                                    // 학생 계정: 결제 여부와 무관하게 모두 짙은 초록색(미결제 UI)로 통일
                                     cell.classList.add('class-selected');
                                     cell.innerText = '★';
                                 } else {
-                                    // 선생님 및 학부모 계정: 상태값에 따라 결제 여부 시각적으로 분리
-                                    if (currentVal === 1) {
-                                        cell.classList.add('class-selected'); // 짙은 초록색 (미결제)
-                                    } else if (currentVal === 2) {
-                                        cell.classList.add('class-paid');     // 짙은 노란색 (결제 완료)
-                                    }
+                                    if (currentVal === 1) cell.classList.add('class-selected'); 
+                                    else if (currentVal === 2) cell.classList.add('class-paid');     
                                     cell.innerText = '★';
                                 }
                             } else {
@@ -741,40 +707,32 @@
                     }
                 }
             }
-            
-            // 선생님 및 학부모용 미결제 수업 시수 업데이트 호출
             updateUnpaidHours();
         }
 
-        // 전체 데이터에서 미결제 수업(상태값 1)의 개수를 합산하는 함수
         function updateUnpaidHours() {
             if (loggedInRole !== 'tutor' && loggedInRole !== 'parent') return;
             
             let unpaidCount = 0;
             for (let key in classData) {
-                // 호환성을 위해 기존의 true도 1로 간주
                 let currentVal = classData[key] === true ? 1 : (classData[key] || 0);
-                if (currentVal === 1) {
-                    unpaidCount++;
-                }
+                if (currentVal === 1) unpaidCount++;
             }
             
-            document.getElementById('unpaid-hours-display').innerText = `미결제 수업 시수: ${unpaidCount}시간`;
+            const unpaidEl = document.getElementById('unpaid-hours-display');
+            if(unpaidEl) unpaidEl.innerText = `미결제 수업 시수: ${unpaidCount}시간`;
         }
 
         function showResult() {
             currentMode = 'result';
             if (loggedInRole === 'tutor') {
                 document.getElementById('mode-text').innerHTML = "<b>매칭 결과 및 대금 관리</b><br><small>한 번 터치: 미결제(초록) / 두 번 터치: 결제완료(노랑)</small>";
-            } else if (loggedInRole === 'parent') {
-                document.getElementById('mode-text').innerHTML = "<b>매칭 결과 및 수업 확정</b><br><small>초록색 칸을 터치하여 최종 수업 일시를 확정하세요.</small>";
             } else {
                 document.getElementById('mode-text').innerHTML = "<b>매칭 결과 및 수업 확정</b><br><small>초록색 칸을 터치하여 최종 수업 일시를 확정하세요.</small>";
             }
             renderTable();
         }
 
-        // 고급 설정 열기/닫기 토글 함수
         function toggleAdvancedSettings() {
             const advDiv = document.getElementById('advanced-settings');
             const btn = document.getElementById('btn-toggle-advanced');
@@ -787,9 +745,6 @@
             }
         }
 
-        // ==========================================
-        // 5. 서버 저장 및 실시간 동기화
-        // ==========================================
         function saveToServer() {
             if (!loggedInRole || !isDataLoaded) return; 
             
@@ -823,15 +778,11 @@
                     if (loggedInRole !== null) renderTable(); 
                     
                     document.getElementById('sync-status').innerHTML = "✨ 최신 데이터 불러옴";
-                    setTimeout(() => {
-                        document.getElementById('sync-status').innerHTML = "🟢 실시간 연결됨";
-                    }, 2000);
+                    setTimeout(() => { document.getElementById('sync-status').innerHTML = "🟢 실시간 연결됨"; }, 2000);
                 } else {
                     document.getElementById('sync-status').innerHTML = "🟢 실시간 연결됨 (데이터 없음)";
                 }
-                
                 isDataLoaded = true; 
-
             }, (error) => {
                 console.error("데이터 읽기 권한 없음:", error);
                 document.getElementById('sync-status').innerHTML = "🔴 권한 거부됨";
@@ -839,7 +790,7 @@
         }
 
         // ==========================================
-        // 6. JSON 파일 백업 및 불러오기
+        // 6. JSON 파일 백업 및 불러오기 / iCal 내보내기
         // ==========================================
         function saveData() {
             const dataToSave = { tutor: tutorData, student: studentData, classTime: classData };
@@ -869,26 +820,15 @@
                         classData = Object.assign(classData, loadedData.classTime || {});
                         
                         renderTable();
-                        scheduleRef.set({
-                            tutor: tutorData,
-                            student: studentData,
-                            classTime: classData
-                        }); 
+                        scheduleRef.set({ tutor: tutorData, student: studentData, classTime: classData }); 
                         showMessage("파일을 불러와 서버에 적용했습니다.");
-                    } else {
-                        showMessage("잘못된 파일 형식입니다.");
-                    }
-                } catch (error) {
-                    showMessage("파일을 읽는 중 오류가 발생했습니다.");
-                }
+                    } else { showMessage("잘못된 파일 형식입니다."); }
+                } catch (error) { showMessage("파일을 읽는 중 오류가 발생했습니다."); }
             };
             reader.readAsText(file);
             event.target.value = '';
         }
 
-        // ==========================================
-        // 7. iCal 내보내기 로직 (미래 시점 필터링 추가)
-        // ==========================================
         function getIcsDateStr(year, month, date, hour) {
             const pad = (n) => String(n).padStart(2, '0');
             const d = new Date(year, month - 1, date, hour); 
@@ -901,7 +841,7 @@
 
             let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//lesson scheduler//KO\r\n";
             let eventCount = 0;
-            const now = new Date(); // 현재 시간 기준점
+            const now = new Date(); 
             
             for (let day of daysArr) {
                 let startHr = null;
@@ -910,7 +850,6 @@
                 for (let i = 0; i < times.length; i++) {
                     const time = times[i]; 
                     const cellId = `${day.id}-${time}`;
-                    // 미결제(1) 또는 결제(2) 혹은 기존 호환성용(true) 인 경우 일정 내보내기에 포함
                     const isConfirmed = (classData[cellId] === true || classData[cellId] === 1 || classData[cellId] === 2);
                     
                     if (isConfirmed) {
@@ -923,10 +862,7 @@
                     } 
                     
                     if ((!isConfirmed || i === times.length - 1) && startHr !== null) {
-                        // 추출된 일정의 시작 시각을 Date 객체로 생성
                         const eventStartTime = new Date(day.year, day.month - 1, day.date, startHr);
-
-                        // 생성된 일정이 현재 시각 이후인 경우에만 캘린더에 포함
                         if (eventStartTime >= now) {
                             const startStr = getIcsDateStr(day.year, day.month, day.date, startHr);
                             const endStr = getIcsDateStr(day.year, day.month, day.date, endHr);
@@ -936,32 +872,22 @@
                             icsContent += `DTEND:${endStr}\r\n`;
                             icsContent += `SUMMARY:${eventName}\r\n`; 
                             icsContent += "END:VEVENT\r\n";
-                            
                             eventCount++;
                         }
-
                         startHr = null; 
                         endHr = null;
                     }
                 }
             }
-            
             icsContent += "END:VCALENDAR\r\n";
 
-            if (eventCount === 0) {
-                alert("현재 시점 이후로 확정된(★) 수업 일정이 없습니다.");
-                return;
-            }
+            if (eventCount === 0) { alert("현재 시점 이후로 확정된(★) 수업 일정이 없습니다."); return; }
             
             const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = "lessons.ics";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            a.href = url; a.download = "lessons.ics";
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
             
             alert(`${eventCount}개의 미래 일정이 캘린더 파일로 저장되었습니다.`);
         }
